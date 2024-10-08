@@ -11,19 +11,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.navigation.NavHostController
-import com.google.accompanist.insets.navigationBarsWithImePadding
+import com.google.accompanist.insets.imePadding
 
 @Composable
 fun NotesScreen(navController: NavHostController) {
     var noteTitle by remember { mutableStateOf("") }
     var noteContent by remember { mutableStateOf("") }
-    var showMenu by remember { mutableStateOf(false) } // Para controlar la visibilidad del menú desplegable
+    var showMenu by remember { mutableStateOf(false) }
 
     // Color de fondo y texto del tema actual
     val backgroundColor = MaterialTheme.colorScheme.background
@@ -34,8 +36,8 @@ fun NotesScreen(navController: NavHostController) {
             .fillMaxSize()
             .background(backgroundColor)
             .padding(16.dp)
-            .verticalScroll(rememberScrollState()) // Permitir desplazamiento en toda la pantalla
-            .navigationBarsWithImePadding() // Ajustar la interfaz cuando el teclado esté visible
+            .verticalScroll(rememberScrollState())
+            .imePadding()
     ) {
         // Barra superior: botón de regreso, título y menú de tres puntos
         Row(
@@ -60,7 +62,7 @@ fun NotesScreen(navController: NavHostController) {
             TextField(
                 value = noteTitle,
                 onValueChange = { noteTitle = it },
-                placeholder = { Text(text = "Título") },
+                placeholder = { Text(text = "Título de la nota") },
                 textStyle = TextStyle(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
@@ -125,7 +127,9 @@ fun NotesScreen(navController: NavHostController) {
             }
         }
 
-        // Área de texto para la nota
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Área de texto para los detalles de la nota
         TextField(
             value = noteContent,
             onValueChange = { noteContent = it },
@@ -133,8 +137,8 @@ fun NotesScreen(navController: NavHostController) {
             textStyle = TextStyle(fontSize = 18.sp),
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)  // Permitir que el área de texto ocupe el espacio restante
-                .heightIn(min = 200.dp) // Mantener altura mínima
+                .weight(1f)
+                .heightIn(min = 200.dp)
         )
 
         Spacer(modifier = Modifier.height(16.dp))

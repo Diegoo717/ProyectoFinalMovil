@@ -44,7 +44,11 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) { innerPadding ->
-                    NavHost(navController = navController, startDestination = "main_screen") {
+                    NavHost(
+                        navController = navController,
+                        startDestination = "main_screen",
+                        modifier = Modifier.padding(innerPadding)
+                    ) {
                         composable("main_screen") { MainScreen(navController) }
                         composable("notes_screen") { NotesScreen(navController) }
                         composable("tasks_screen") { TasksScreen(navController) }
@@ -196,7 +200,7 @@ fun MainScreen(navController: NavHostController, modifier: Modifier = Modifier) 
 fun NoteItem(note: String) {
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFFFF59D) // Color para diferenciar las notas
+            containerColor = Color(0xFFFFF59D)
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -216,7 +220,7 @@ fun NoteItem(note: String) {
 fun TaskItem(task: String) {
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFBBDEFB) // Color para diferenciar las tareas
+            containerColor = Color(0xFFBBDEFB)
         ),
         modifier = Modifier
             .fillMaxWidth()

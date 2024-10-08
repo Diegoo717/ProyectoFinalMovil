@@ -64,8 +64,8 @@ fun TasksScreen(navController: NavHostController) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(16.dp)
-            .verticalScroll(rememberScrollState()) // Permitir desplazamiento en toda la pantalla
-            .navigationBarsWithImePadding() // Ajustar la interfaz cuando el teclado esté visible
+            .verticalScroll(rememberScrollState())
+            .navigationBarsWithImePadding()
     ) {
         // Barra superior: botón de regreso, título y menú de tres puntos
         Row(
@@ -201,7 +201,7 @@ fun TasksScreen(navController: NavHostController) {
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .heightIn(min = 200.dp) // Mantener altura mínima
+                .heightIn(min = 200.dp)
         )
 
         Spacer(modifier = Modifier.height(16.dp))
