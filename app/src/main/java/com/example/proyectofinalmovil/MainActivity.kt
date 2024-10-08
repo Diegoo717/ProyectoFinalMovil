@@ -6,6 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.proyectofinalmovil.ui.theme.ProyectoFinalMovilTheme
 import com.example.proyectofinalmovil.nota.NotesScreen
@@ -29,16 +32,26 @@ class MainActivity : ComponentActivity() {
         setContent {
             ProyectoFinalMovilTheme {
                 val navController = rememberNavController()
+                val currentBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentRoute = currentBackStackEntry?.destination?.route
+
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     floatingActionButton = {
-                        FloatingActionButtonsGroup(navController)
+                        // Mostrar el botón flotante solo en la pantalla principal ("main_screen")
+                        if (currentRoute == "main_screen") {
+                            FloatingActionButtonsGroup(navController)
+                        }
                     }
                 ) { innerPadding ->
-                    NavHost(navController = navController, startDestination = "main_screen") {
+                    NavHost(
+                        navController = navController,
+                        startDestination = "main_screen",
+                        modifier = Modifier.padding(innerPadding)
+                    ) {
                         composable("main_screen") { MainScreen(navController) }
-                        composable("notes_screen") { NotesScreen() }
-                        composable("tasks_screen") { TasksScreen() }
+                        composable("notes_screen") { NotesScreen(navController) }
+                        composable("tasks_screen") { TasksScreen(navController) }
                     }
                 }
             }
@@ -68,7 +81,7 @@ fun FloatingActionButtonsGroup(navController: NavHostController) {
                     navController.navigate("notes_screen")
                 },
                 modifier = Modifier.padding(bottom = 60.dp),
-                containerColor = Color.Gray,
+                containerColor = MaterialTheme.colorScheme.secondary,
                 shape = CircleShape
             ) {
                 Text("Nota")
@@ -87,7 +100,7 @@ fun FloatingActionButtonsGroup(navController: NavHostController) {
                     navController.navigate("tasks_screen")
                 },
                 modifier = Modifier.padding(bottom = 120.dp),
-                containerColor = Color.Gray,
+                containerColor = MaterialTheme.colorScheme.secondary,
                 shape = CircleShape
             ) {
                 Text("Tarea")
@@ -108,16 +121,27 @@ fun FloatingActionButtonsGroup(navController: NavHostController) {
 fun MainScreen(navController: NavHostController, modifier: Modifier = Modifier) {
     var searchText by remember { mutableStateOf("") }
 
+    // Lista simulada de notas y tareas (puedes reemplazarla con tus datos reales)
+    val notesAndTasks = listOf(
+        "Nota: Revisión de código",
+        "Tarea: Comprar materiales",
+        "Nota: Planificación semanal",
+        "Tarea: Proyecto final"
+    )
+
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val textColor = MaterialTheme.colorScheme.onBackground
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(backgroundColor)
     ) {
-        // Texto "Notas"
+        // Texto "Notas y Tareas"
         Text(
-            text = "Notas",
+            text = "Notas y Tareas",
             style = MaterialTheme.typography.headlineMedium,
-            color = Color.Black,
+            color = textColor,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 50.dp, bottom = 16.dp),
@@ -129,30 +153,85 @@ fun MainScreen(navController: NavHostController, modifier: Modifier = Modifier) 
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically, // Centra verticalmente
-            horizontalArrangement = Arrangement.Center // Centra horizontalmente
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
             // TextField para ingresar texto
             TextField(
                 value = searchText,
                 onValueChange = { searchText = it },
                 placeholder = { Text(text = "Buscar...") },
-                singleLine = true, // Evita que sea multilinea
+                singleLine = true,
                 modifier = Modifier
-                    .weight(1f) // Hace que el TextField ocupe el espacio disponible
-                    .padding(end = 8.dp) // Espacio entre el TextField y el botón
+                    .weight(1f)
+                    .padding(end = 8.dp)
             )
 
             // Botón para realizar la búsqueda
             Button(onClick = {
-                // Aquí puedes realizar la acción de búsqueda
                 println("Búsqueda realizada: $searchText")
             }) {
                 Text("Buscar")
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp)) // Espacio adicional si es necesario
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Lista de notas y tareas
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+        ) {
+            items(notesAndTasks) { item ->
+                // Distinción entre notas y tareas
+                if (item.startsWith("Nota:")) {
+                    NoteItem(item)
+                } else {
+                    TaskItem(item)
+                }
+            }
+        }
+    }
+}
+
+// Composable para mostrar una nota
+@Composable
+fun NoteItem(note: String) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFFFF59D)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Text(
+            text = note,
+            modifier = Modifier.padding(16.dp),
+            color = Color.Black
+        )
+    }
+}
+
+// Composable para mostrar una tarea
+@Composable
+fun TaskItem(task: String) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFBBDEFB)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Text(
+            text = task,
+            modifier = Modifier.padding(16.dp),
+            color = Color.Black
+        )
     }
 }
 
