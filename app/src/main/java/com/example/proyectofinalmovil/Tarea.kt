@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color // Importación añadida
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -24,12 +25,13 @@ import androidx.navigation.NavHostController
 import com.google.accompanist.insets.navigationBarsWithImePadding
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class) // Anotación para usar APIs experimentales
 @Composable
 fun TasksScreen(navController: NavHostController) {
     var taskTitle by remember { mutableStateOf("") }
     var taskContent by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
-    var notificationEnabled by remember { mutableStateOf(false) } // Controlar notificaciones
+    var notificationEnabled by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Fecha y hora seleccionadas
@@ -90,11 +92,16 @@ fun TasksScreen(navController: NavHostController) {
             TextField(
                 value = taskTitle,
                 onValueChange = { taskTitle = it },
-                placeholder = { Text(text = "Título de la tarea") },
+                placeholder = { Text(text = "Título") },
                 textStyle = TextStyle(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
+                ),
+                colors = TextFieldDefaults.textFieldColors(
+                    containerColor = Color.White,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
                 ),
                 modifier = Modifier
                     .weight(1f)
@@ -168,36 +175,56 @@ fun TasksScreen(navController: NavHostController) {
             }
         }
 
-        // Seleccionar fecha
-        Button(
-            onClick = {
-                datePickerDialog.show()
-            },
-            modifier = Modifier.fillMaxWidth()
+        // Row para los botones de selección de fecha y hora
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly // Espacio entre botones
         ) {
-            Text(text = selectedDate)
+            // Botón de selección de fecha
+            Button(
+                onClick = { datePickerDialog.show() },
+                modifier = Modifier
+                    .height(36.dp) // Altura del botón
+                    .weight(1f) // Cada botón ocupa la misma proporción del ancho
+                    .padding(end = 4.dp), // Espacio entre los botones
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Black // Color de fondo negro
+                )
+            ) {
+                Text(text = selectedDate, color = Color.White) // Texto en color blanco
+            }
+
+            // Botón de selección de hora
+            Button(
+                onClick = { timePickerDialog.show() },
+                modifier = Modifier
+                    .height(36.dp) // Altura del botón
+                    .weight(1f) // Cada botón ocupa la misma proporción del ancho
+                    .padding(start = 4.dp), // Espacio entre los botones
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Black // Color de fondo negro
+                )
+            ) {
+                Text(text = selectedTime, color = Color.White) // Texto en color blanco
+            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Seleccionar hora
-        Button(
-            onClick = {
-                timePickerDialog.show()
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(text = selectedTime)
-        }
-
+        // Espaciado entre botones y área de texto
         Spacer(modifier = Modifier.height(16.dp))
 
         // Área de texto para los detalles de la tarea
         TextField(
             value = taskContent,
             onValueChange = { taskContent = it },
-            placeholder = { Text(text = "Detalles de la tarea") },
+            placeholder = { Text(text = "Detalles") },
             textStyle = TextStyle(fontSize = 18.sp),
+            colors = TextFieldDefaults.textFieldColors(
+                containerColor = Color.White,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -208,8 +235,7 @@ fun TasksScreen(navController: NavHostController) {
 
         // Íconos para agregar imagen y audio
         Row(
-            modifier = Modifier
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             Icon(

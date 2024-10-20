@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,7 +39,6 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     floatingActionButton = {
-                        // Mostrar el botón flotante solo en la pantalla principal ("main_screen")
                         if (currentRoute == "main_screen") {
                             FloatingActionButtonsGroup(navController)
                         }
@@ -70,58 +70,56 @@ fun FloatingActionButtonsGroup(navController: NavHostController) {
         contentAlignment = Alignment.BottomEnd
     ) {
         // Botón "Nota"
-        AnimatedVisibility(
-            visible = expanded,
-            enter = androidx.compose.animation.expandVertically(),
-            exit = androidx.compose.animation.shrinkVertically()
-        ) {
+        AnimatedVisibility(visible = expanded) {
             FloatingActionButton(
-                onClick = {
-                    // Navegar a la pantalla de notas
-                    navController.navigate("notes_screen")
-                },
+                onClick = { navController.navigate("notes_screen") },
                 modifier = Modifier.padding(bottom = 60.dp),
-                containerColor = MaterialTheme.colorScheme.secondary,
+                containerColor = Color(0xFFFFF59D), // Color amarillo
                 shape = CircleShape
             ) {
-                Text("Nota")
+                Text("Nota", color = Color.Black) // Cambiado el color del texto a negro
             }
         }
 
         // Botón "Tarea"
-        AnimatedVisibility(
-            visible = expanded,
-            enter = androidx.compose.animation.expandVertically(),
-            exit = androidx.compose.animation.shrinkVertically()
-        ) {
+        AnimatedVisibility(visible = expanded) {
             FloatingActionButton(
-                onClick = {
-                    // Navegar a la pantalla de tareas
-                    navController.navigate("tasks_screen")
-                },
+                onClick = { navController.navigate("tasks_screen") },
                 modifier = Modifier.padding(bottom = 120.dp),
-                containerColor = MaterialTheme.colorScheme.secondary,
+                containerColor = Color(0xFFBBDEFB), // Color azul (el mismo que el de las notas)
                 shape = CircleShape
             ) {
-                Text("Tarea")
+                Text("Tarea", color = Color.Black) // Cambiado el color del texto a negro
+            }
+        }
+
+        // Botón "Nueva Carpeta"
+        AnimatedVisibility(visible = expanded) {
+            FloatingActionButton(
+                onClick = { /* Acción para nueva carpeta */ },
+                modifier = Modifier.padding(bottom = 180.dp),
+                containerColor = Color(0xFFFFC107), // Color naranja claro
+                shape = CircleShape
+            ) {
+                Text("Carpeta", color = Color.Black) // Cambiado el color del texto a negro
             }
         }
 
         // Botón principal "+"
         FloatingActionButton(
             onClick = { expanded = !expanded },
-            containerColor = MaterialTheme.colorScheme.primary
+            containerColor = Color.Gray // Color gris
         ) {
-            Text("+")
+            Text("+", color = Color.White) // Cambiado el color del texto a blanco
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class) // Asegúrate de tener esta anotación
 @Composable
 fun MainScreen(navController: NavHostController, modifier: Modifier = Modifier) {
     var searchText by remember { mutableStateOf("") }
 
-    // Lista simulada de notas y tareas (puedes reemplazarla con tus datos reales)
     val notesAndTasks = listOf(
         "Nota: Revisión de código",
         "Tarea: Comprar materiales",
@@ -148,32 +146,20 @@ fun MainScreen(navController: NavHostController, modifier: Modifier = Modifier) 
             textAlign = TextAlign.Center
         )
 
-        // Barra de búsqueda y botón
-        Row(
+        // Barra de búsqueda
+        OutlinedTextField(
+            value = searchText,
+            onValueChange = { searchText = it },
+            placeholder = { Text(text = "Buscar...") },
+            singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            // TextField para ingresar texto
-            TextField(
-                value = searchText,
-                onValueChange = { searchText = it },
-                placeholder = { Text(text = "Buscar...") },
-                singleLine = true,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 8.dp)
-            )
+                .padding(horizontal = 16.dp)
+        )
 
-            // Botón para realizar la búsqueda
-            Button(onClick = {
-                println("Búsqueda realizada: $searchText")
-            }) {
-                Text("Buscar")
-            }
-        }
+        Spacer(modifier = Modifier.height(16.dp))
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -184,7 +170,6 @@ fun MainScreen(navController: NavHostController, modifier: Modifier = Modifier) 
                 .padding(horizontal = 16.dp)
         ) {
             items(notesAndTasks) { item ->
-                // Distinción entre notas y tareas
                 if (item.startsWith("Nota:")) {
                     NoteItem(item)
                 } else {
@@ -220,7 +205,7 @@ fun NoteItem(note: String) {
 fun TaskItem(task: String) {
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFBBDEFB)
+            containerColor = Color(0xFFBBDEFB) // Color azul
         ),
         modifier = Modifier
             .fillMaxWidth()
