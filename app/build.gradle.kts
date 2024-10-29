@@ -60,6 +60,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.5.0")
     implementation("com.google.accompanist:accompanist-insets:0.30.0")
     implementation("androidx.compose.material3:material3:1.1.0-alpha01")
+    implementation("androidx.compose.material3:material3:<latest_version>")
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

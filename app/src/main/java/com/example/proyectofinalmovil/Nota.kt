@@ -12,13 +12,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.view.WindowCompat
 import androidx.navigation.NavHostController
+import com.example.proyectofinalmovil.R
 import com.google.accompanist.insets.imePadding
 
 @Composable
@@ -50,7 +51,7 @@ fun NotesScreen(navController: NavHostController) {
             // Botón de regreso
             Icon(
                 imageVector = Icons.Filled.ArrowBack,
-                contentDescription = "Regresar",
+                contentDescription = stringResource(id = R.string.back_button), // Descripción internacionalizada
                 modifier = Modifier
                     .size(24.dp)
                     .clickable {
@@ -62,7 +63,7 @@ fun NotesScreen(navController: NavHostController) {
             TextField(
                 value = noteTitle,
                 onValueChange = { noteTitle = it },
-                placeholder = { Text(text = "Título de la nota") },
+                placeholder = { Text(text = stringResource(id = R.string.note_title_placeholder)) }, // Placeholder internacionalizado
                 textStyle = TextStyle(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
@@ -77,7 +78,7 @@ fun NotesScreen(navController: NavHostController) {
             Box {
                 Icon(
                     imageVector = Icons.Filled.MoreVert,
-                    contentDescription = "Menú",
+                    contentDescription = stringResource(id = R.string.menu), // Descripción internacionalizada
                     modifier = Modifier
                         .size(24.dp)
                         .clickable {
@@ -91,7 +92,7 @@ fun NotesScreen(navController: NavHostController) {
                     onDismissRequest = { showMenu = false } // Cerrar el menú cuando se hace clic fuera
                 ) {
                     DropdownMenuItem(
-                        text = { Text("Guardar") },
+                        text = { Text(stringResource(id = R.string.save)) }, // Texto internacionalizado
                         onClick = {
                             // Acción para guardar la nota
                             showMenu = false
@@ -102,7 +103,7 @@ fun NotesScreen(navController: NavHostController) {
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Compartir") },
+                        text = { Text(stringResource(id = R.string.share)) }, // Texto internacionalizado
                         onClick = {
                             // Acción para compartir la nota
                             showMenu = false
@@ -113,7 +114,7 @@ fun NotesScreen(navController: NavHostController) {
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("Borrar") },
+                        text = { Text(stringResource(id = R.string.delete)) }, // Texto internacionalizado
                         onClick = {
                             // Acción para borrar la nota
                             showMenu = false
@@ -133,7 +134,7 @@ fun NotesScreen(navController: NavHostController) {
         TextField(
             value = noteContent,
             onValueChange = { noteContent = it },
-            placeholder = { Text(text = "Escribe tu nota aquí...") },
+            placeholder = { Text(text = stringResource(id = R.string.note_content_placeholder)) }, // Placeholder internacionalizado
             textStyle = TextStyle(fontSize = 18.sp),
             modifier = Modifier
                 .fillMaxWidth()
@@ -145,18 +146,17 @@ fun NotesScreen(navController: NavHostController) {
 
         // Íconos para agregar imagen y audio
         Row(
-            modifier = Modifier
-                .fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             Icon(
                 imageVector = Icons.Filled.Image,
-                contentDescription = "Agregar imagen",
+                contentDescription = stringResource(id = R.string.add_image), // Descripción internacionalizada
                 modifier = Modifier.size(48.dp)
             )
             Icon(
                 imageVector = Icons.Filled.Mic,
-                contentDescription = "Agregar audio",
+                contentDescription = stringResource(id = R.string.add_audio), // Descripción internacionalizada
                 modifier = Modifier.size(48.dp)
             )
         }

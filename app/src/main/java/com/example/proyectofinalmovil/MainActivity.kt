@@ -10,11 +10,17 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Note
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Task
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -23,35 +29,64 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.proyectofinalmovil.ui.theme.ProyectoFinalMovilTheme
-import com.example.proyectofinalmovil.nota.NotesScreen
 import com.example.proyectofinalmovil.tarea.TasksScreen
+import com.example.proyectofinalmovil.ui.theme.ProyectoFinalMovilTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContent {
             ProyectoFinalMovilTheme {
                 val navController = rememberNavController()
                 val currentBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = currentBackStackEntry?.destination?.route
 
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    floatingActionButton = {
-                        if (currentRoute == "main_screen") {
-                            FloatingActionButtonsGroup(navController)
-                        }
+                // Estado del Drawer
+                val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+                val scope = rememberCoroutineScope()
+
+                // Drawer
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
+                        DrawerContent(navController, scope, drawerState)
                     }
-                ) { innerPadding ->
-                    NavHost(
-                        navController = navController,
-                        startDestination = "main_screen",
-                        modifier = Modifier.padding(innerPadding)
-                    ) {
-                        composable("main_screen") { MainScreen(navController) }
-                        composable("notes_screen") { NotesScreen(navController) }
-                        composable("tasks_screen") { TasksScreen(navController) }
+                ) {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        topBar = {
+                            TopAppBar(
+                                title = { Text(stringResource(id = R.string.app_name)) },
+                                navigationIcon = {
+                                    IconButton(onClick = {
+                                        scope.launch { drawerState.open() }
+                                    }) {
+                                        Icon(imageVector = Icons.Default.Menu, contentDescription = "Menu")
+                                    }
+                                }
+                            )
+                        },
+                        floatingActionButton = {
+                            if (currentRoute == "main_screen") {
+                                FloatingActionButtonsGroup(navController)
+                            }
+                        }
+                    ) { innerPadding ->
+                        NavHost(
+                            navController = navController,
+                            startDestination = "main_screen",
+                            modifier = Modifier.padding(innerPadding)
+                        ) {
+                            composable("main_screen") { MainScreen(navController) }
+                            composable("notas_guardadas") { NotasGuardadas(navController) }
+                            composable("tareas_guardadas") { TareasGuardadas(navController) }
+                            composable("tasks_screen") { TasksScreen(navController) }
+                            composable("ajustes_screen") { AjustesActivity() } // Ruta para AjustesActivity
+                        }
                     }
                 }
             }
@@ -59,6 +94,46 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@Composable
+fun DrawerContent(navController: NavHostController, scope: CoroutineScope, drawerState: DrawerState) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text("Menu", style = MaterialTheme.typography.headlineMedium)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Opción de Notas
+        TextButton(onClick = {
+            navController.navigate("notas_guardadas")
+            scope.launch { drawerState.close() }
+        }) {
+            Icon(imageVector = Icons.Default.Note, contentDescription = "Notas", modifier = Modifier.padding(end = 8.dp))
+            Text("Notas")
+        }
+
+        // Opción de Tareas
+        TextButton(onClick = {
+            navController.navigate("tareas_guardadas")
+            scope.launch { drawerState.close() }
+        }) {
+            Icon(imageVector = Icons.Default.Task, contentDescription = "Tareas", modifier = Modifier.padding(end = 8.dp))
+            Text("Tareas")
+        }
+
+        // Opción de Ajustes
+        TextButton(onClick = {
+            navController.navigate("ajustes_screen") // Navega a AjustesActivity
+            scope.launch { drawerState.close() }
+        }) {
+            Icon(imageVector = Icons.Default.Settings, contentDescription = "Ajustes", modifier = Modifier.padding(end = 8.dp))
+            Text("Ajustes")
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FloatingActionButtonsGroup(navController: NavHostController) {
     var expanded by remember { mutableStateOf(false) }
@@ -72,12 +147,12 @@ fun FloatingActionButtonsGroup(navController: NavHostController) {
         // Botón "Nota"
         AnimatedVisibility(visible = expanded) {
             FloatingActionButton(
-                onClick = { navController.navigate("notes_screen") },
+                onClick = { navController.navigate("notas_guardadas") },
                 modifier = Modifier.padding(bottom = 60.dp),
                 containerColor = Color(0xFFFFF59D), // Color amarillo
                 shape = CircleShape
             ) {
-                Text("Nota", color = Color.Black) // Cambiado el color del texto a negro
+                Text(stringResource(id = R.string.note), color = Color.Black)
             }
         }
 
@@ -86,10 +161,10 @@ fun FloatingActionButtonsGroup(navController: NavHostController) {
             FloatingActionButton(
                 onClick = { navController.navigate("tasks_screen") },
                 modifier = Modifier.padding(bottom = 120.dp),
-                containerColor = Color(0xFFBBDEFB), // Color azul (el mismo que el de las notas)
+                containerColor = Color(0xFFBBDEFB), // Color azul
                 shape = CircleShape
             ) {
-                Text("Tarea", color = Color.Black) // Cambiado el color del texto a negro
+                Text(stringResource(id = R.string.task), color = Color.Black)
             }
         }
 
@@ -101,21 +176,21 @@ fun FloatingActionButtonsGroup(navController: NavHostController) {
                 containerColor = Color(0xFFFFC107), // Color naranja claro
                 shape = CircleShape
             ) {
-                Text("Carpeta", color = Color.Black) // Cambiado el color del texto a negro
+                Text(stringResource(id = R.string.folder), color = Color.Black)
             }
         }
 
         // Botón principal "+"
         FloatingActionButton(
             onClick = { expanded = !expanded },
-            containerColor = Color.Gray // Color gris
+            containerColor = Color.Gray
         ) {
-            Text("+", color = Color.White) // Cambiado el color del texto a blanco
+            Text(stringResource(id = R.string.add_button), color = Color.White)
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class) // Asegúrate de tener esta anotación
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(navController: NavHostController, modifier: Modifier = Modifier) {
     var searchText by remember { mutableStateOf("") }
@@ -127,19 +202,16 @@ fun MainScreen(navController: NavHostController, modifier: Modifier = Modifier) 
         "Tarea: Proyecto final"
     )
 
-    val backgroundColor = MaterialTheme.colorScheme.background
-    val textColor = MaterialTheme.colorScheme.onBackground
-
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(backgroundColor)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // Texto "Notas y Tareas"
         Text(
-            text = "Notas y Tareas",
+            text = stringResource(id = R.string.notes_tasks),
             style = MaterialTheme.typography.headlineMedium,
-            color = textColor,
+            color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 50.dp, bottom = 16.dp),
@@ -150,7 +222,7 @@ fun MainScreen(navController: NavHostController, modifier: Modifier = Modifier) 
         OutlinedTextField(
             value = searchText,
             onValueChange = { searchText = it },
-            placeholder = { Text(text = "Buscar...") },
+            placeholder = { Text(text = stringResource(id = R.string.search_placeholder)) },
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
             colors = TextFieldDefaults.outlinedTextFieldColors(),
@@ -158,8 +230,6 @@ fun MainScreen(navController: NavHostController, modifier: Modifier = Modifier) 
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
         )
-
-        Spacer(modifier = Modifier.height(16.dp))
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -205,7 +275,7 @@ fun NoteItem(note: String) {
 fun TaskItem(task: String) {
     Card(
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFFBBDEFB) // Color azul
+            containerColor = Color(0xFFBBDEFB)
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -222,7 +292,7 @@ fun TaskItem(task: String) {
 
 @Preview(showBackground = true)
 @Composable
-fun MainScreenPreview() {
+fun DefaultPreview() {
     ProyectoFinalMovilTheme {
         MainScreen(rememberNavController())
     }
