@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name"></string>
+    <string name="welcome_message">¡Bienvenido a mi aplicación!</string>
+    <string name="notes_tasks">Notas y Tareas</string>
+    <string name="search_placeholder">Buscar...</string>
+    <string name="note">Nota</string>
+    <string name="task">Tarea</string>
+    <string name="folder">Carpeta</string>
+    <string name="add_button">+</string>
+    <string name="back_button">Regresar</string>
+    <string name="note_title_placeholder">Título de la Nota</string>
+    <string name="menu">Menú</string>
+    <string name="save">Guardar</string>
+    <string name="share">Compartir</string>
+    <string name="delete">Borrar</string>
+    <string name="note_content_placeholder">Escribe tu nota aquí...</string>
+    <string name="add_image">Agregar Imagen</string>
+    <string name="add_audio">Agregar Audio</string>
+    <string name="task_title_placeholder">Título de la Tarea</string>
+    <string name="task_content_placeholder">Detalles de la Tarea</string>
+    <string name="details_placeholder">Detalles...</string>
+    <string name="select_date">Seleccionar Fecha</string>
+    <string name="select_time">Seleccionar Hora</string>
+    <string name="notification_enabled">Notificación Activada</string>
+    <string name="notification_disabled">Notificación Desactivada</string>
+    <string name="task_saved">Tarea Guardada</string>
+    <string name="task_shared">Compartir Tarea</string>
+    <string name="task_deleted">Tarea Borrada</string>
+    <string name="enable_notification">Activar Notificación</string>
+    <string name="disable_notification">Desactivar Notificación</string>
+    <string name="share_task">Compartir tarea</string>
+    <string name="title_placeholder">Ingrese el título</string>
+</resources>

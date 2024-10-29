@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name">My Application</string>
+    <string name="welcome_message">Welcome to my application!</string>
+    <string name="notes_tasks">Notes and Tasks</string>
+    <string name="search_placeholder">Search...</string>
+    <string name="note">Note</string>
+    <string name="task">Task</string>
+    <string name="folder">Folder</string>
+    <string name="add_button">+</string>
+    <string name="back_button">Back</string>
+    <string name="note_title_placeholder">Note Title</string>
+    <string name="menu">Menu</string>
+    <string name="save">Save</string>
+    <string name="share">Share</string>
+    <string name="delete">Delete</string>
+    <string name="note_content_placeholder">Write your note here...</string>
+    <string name="add_image">Add Image</string>
+    <string name="add_audio">Add Audio</string>
+    <string name="task_title_placeholder">Task Title</string>
+    <string name="task_content_placeholder">Task Details</string>
+    <string name="details_placeholder">Details...</string>
+    <string name="select_date">Select Date</string>
+    <string name="select_time">Select Time</string>
+    <string name="notification_enabled">Notification Enabled</string>
+    <string name="notification_disabled">Notification Disabled</string>
+    <string name="task_saved">Task Saved</string>
+    <string name="task_shared">Share Task</string>
+    <string name="task_deleted">Task Deleted</string>
+    <string name="enable_notification">Enable Notification</string>
+    <string name="disable_notification">Disable Notification</string>
+    <string name="share_task">Share task</string>
+    <string name="title_placeholder">Enter the title</string>
+</resources>
