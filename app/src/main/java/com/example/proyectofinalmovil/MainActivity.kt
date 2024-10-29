@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.proyectofinalmovil.tarea.TasksScreen
+import com.example.proyectofinalmovil.nota.NotesScreen
 import com.example.proyectofinalmovil.ui.theme.ProyectoFinalMovilTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -82,7 +83,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(innerPadding)
                         ) {
                             composable("main_screen") { MainScreen(navController) }
-                            composable("notas_guardadas") { NotasGuardadas(navController) }
+                            composable("notas") { NotesScreen(navController) } // Asegúrate de que la ruta sea correcta
                             composable("tareas_guardadas") { TareasGuardadas(navController) }
                             composable("tasks_screen") { TasksScreen(navController) }
                             composable("ajustes_screen") { AjustesActivity() } // Ruta para AjustesActivity
@@ -106,7 +107,7 @@ fun DrawerContent(navController: NavHostController, scope: CoroutineScope, drawe
 
         // Opción de Notas
         TextButton(onClick = {
-            navController.navigate("notas_guardadas")
+            navController.navigate("notas")
             scope.launch { drawerState.close() }
         }) {
             Icon(imageVector = Icons.Default.Note, contentDescription = "Notas", modifier = Modifier.padding(end = 8.dp))
@@ -147,7 +148,7 @@ fun FloatingActionButtonsGroup(navController: NavHostController) {
         // Botón "Nota"
         AnimatedVisibility(visible = expanded) {
             FloatingActionButton(
-                onClick = { navController.navigate("notas_guardadas") },
+                onClick = { navController.navigate("notas") }, // Cambia la ruta aquí
                 modifier = Modifier.padding(bottom = 60.dp),
                 containerColor = Color(0xFFFFF59D), // Color amarillo
                 shape = CircleShape
