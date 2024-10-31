@@ -2,8 +2,8 @@ package com.example.proyectofinalmovil.tarea
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import android.content.Context
-import android.widget.Toast
+import android.widget.DatePicker
+import android.widget.TimePicker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -25,218 +25,220 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.example.proyectofinalmovil.R
-import com.google.accompanist.insets.navigationBarsWithImePadding
+import com.google.accompanist.insets.imePadding
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TasksScreen(navController: NavHostController) {
     var taskTitle by remember { mutableStateOf("") }
     var taskContent by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
+    var selectedTime by remember { mutableStateOf("") }
+    var selectedDate by remember { mutableStateOf("") }
     var notificationEnabled by remember { mutableStateOf(false) }
-    val context = LocalContext.current
 
-    val selectDateText = stringResource(id = R.string.select_date)
-    val selectTimeText = stringResource(id = R.string.select_time)
-    var selectedDate by remember { mutableStateOf(selectDateText) }
-    var selectedTime by remember { mutableStateOf(selectTimeText) }
+    // Variables para manejar el estado de los diálogos
+    var showTimePicker by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
-    val calendar = Calendar.getInstance()
-    val datePickerDialog = createDatePickerDialog(context, calendar) { date ->
-        selectedDate = date
-    }
-    val timePickerDialog = createTimePickerDialog(context, calendar) { time ->
-        selectedTime = time
-    }
+    // Color de fondo y texto del tema actual
+    val backgroundColor = MaterialTheme.colorScheme.background
+    val textColor = MaterialTheme.colorScheme.onBackground
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(backgroundColor)
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
-            .navigationBarsWithImePadding()
+            .imePadding()
     ) {
-        HeaderRow(navController, taskTitle) { taskTitle = it }
-        DropdownMenuBox(showMenu, notificationEnabled, context) { menuSelected, enabled ->
-            showMenu = menuSelected
-            notificationEnabled = enabled
-        }
-        DateAndTimePickerRow(selectedDate, selectedTime, datePickerDialog, timePickerDialog)
-        TaskContentField(taskContent) { taskContent = it }
-        AddMediaIcons()
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun HeaderRow(navController: NavHostController, taskTitle: String, onTitleChange: (String) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Icon(
-            imageVector = Icons.Filled.ArrowBack,
-            contentDescription = stringResource(id = R.string.back_button),
+        // Barra superior: botón de regreso, título y menú de tres puntos
+        Row(
             modifier = Modifier
-                .size(24.dp)
-                .clickable {
-                    navController.popBackStack()
-                }
-        )
-
-        TextField(
-            value = taskTitle,
-            onValueChange = onTitleChange,
-            placeholder = { Text(text = stringResource(id = R.string.title_placeholder)) },
-            textStyle = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
-            colors = TextFieldDefaults.textFieldColors(
-                containerColor = Color.White,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
-            ),
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 16.dp)
-        )
-    }
-}
-
-@Composable
-fun DropdownMenuBox(
-    showMenu: Boolean,
-    notificationEnabled: Boolean,
-    context: Context,
-    onMenuAction: (Boolean, Boolean) -> Unit
-) {
-    Box {
-        Icon(
-            imageVector = Icons.Filled.MoreVert,
-            contentDescription = stringResource(id = R.string.menu),
-            modifier = Modifier
-                .size(24.dp)
-                .clickable {
-                    onMenuAction(!showMenu, notificationEnabled)
-                }
-        )
-
-        DropdownMenu(
-            expanded = showMenu,
-            onDismissRequest = { onMenuAction(false, notificationEnabled) }
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            DropdownMenuItem(
-                text = { Text(if (notificationEnabled) stringResource(id = R.string.disable_notification) else stringResource(id = R.string.enable_notification)) },
-                onClick = {
-                    val newEnabled = !notificationEnabled
-                    onMenuAction(false, newEnabled)
-                    Toast.makeText(context, if (newEnabled) context.getString(R.string.notification_enabled) else context.getString(R.string.notification_disabled), Toast.LENGTH_SHORT).show()
-                },
-                leadingIcon = { Icon(imageVector = if (notificationEnabled) Icons.Filled.NotificationsOff else Icons.Filled.Notifications, contentDescription = null) }
+            // Botón de regreso
+            Icon(
+                imageVector = Icons.Filled.ArrowBack,
+                contentDescription = stringResource(id = R.string.back_button),
+                modifier = Modifier
+                    .size(24.dp)
+                    .clickable {
+                        navController.popBackStack()
+                    }
             )
-            // Other menu items can be added here in similar fashion...
-        }
-    }
-}
 
-@Composable
-fun DateAndTimePickerRow(
-    selectedDate: String,
-    selectedTime: String,
-    datePickerDialog: DatePickerDialog,
-    timePickerDialog: TimePickerDialog
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        Button(
-            onClick = { datePickerDialog.show() },
-            modifier = Modifier
-                .height(36.dp)
-                .weight(1f)
-                .padding(end = 4.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Black)
+            // Título centrado
+            TextField(
+                value = taskTitle,
+                onValueChange = { taskTitle = it },
+                placeholder = { Text(text = stringResource(id = R.string.task_title_placeholder)) },
+                textStyle = TextStyle(
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 16.dp)
+            )
+
+            // Menú de tres puntos
+            Box {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = stringResource(id = R.string.menu),
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clickable {
+                            showMenu = !showMenu
+                        }
+                )
+
+                // DropdownMenu para guardar, borrar, compartir
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(id = R.string.save)) },
+                        onClick = {
+                            showMenu = false
+                            println("Guardar tarea")
+                        },
+                        leadingIcon = {
+                            Icon(imageVector = Icons.Filled.Edit, contentDescription = null)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(id = R.string.share)) },
+                        onClick = {
+                            showMenu = false
+                            println("Compartir tarea")
+                        },
+                        leadingIcon = {
+                            Icon(imageVector = Icons.Filled.Share, contentDescription = null)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(id = R.string.delete)) },
+                        onClick = {
+                            showMenu = false
+                            println("Borrar tarea")
+                        },
+                        leadingIcon = {
+                            Icon(imageVector = Icons.Filled.Delete, contentDescription = null)
+                        }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Row para los botones de seleccionar hora y fecha
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(text = selectedDate, color = Color.White)
+            // Botón para seleccionar la hora
+            Button(
+                onClick = { showTimePicker = true },
+                modifier = Modifier.weight(1f).padding(end = 8.dp) // Añadir margen derecho
+            ) {
+                Text(text = if (selectedTime.isEmpty()) stringResource(id = R.string.select_time) else selectedTime)
+            }
+
+            // Botón para seleccionar la fecha
+            Button(
+                onClick = { showDatePicker = true },
+                modifier = Modifier.weight(1f).padding(start = 8.dp) // Añadir margen izquierdo
+            ) {
+                Text(text = if (selectedDate.isEmpty()) stringResource(id = R.string.select_date) else selectedDate)
+            }
         }
 
-        Button(
-            onClick = { timePickerDialog.show() },
-            modifier = Modifier
-                .height(36.dp)
-                .weight(1f)
-                .padding(start = 4.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.Black)
+        // Mostrar el diálogo de selección de hora
+        if (showTimePicker) {
+            val currentTime = Calendar.getInstance()
+            TimePickerDialog(
+                LocalContext.current,
+                { _: TimePicker, hour: Int, minute: Int ->
+                    selectedTime = String.format("%02d:%02d", hour, minute)
+                    showTimePicker = false // Cierra el diálogo
+                },
+                currentTime.get(Calendar.HOUR_OF_DAY),
+                currentTime.get(Calendar.MINUTE),
+                true
+            ).show()
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Mostrar el diálogo de selección de fecha
+        if (showDatePicker) {
+            val currentDate = Calendar.getInstance()
+            DatePickerDialog(
+                LocalContext.current,
+                { _: DatePicker, year: Int, month: Int, dayOfMonth: Int ->
+                    selectedDate = String.format("%04d-%02d-%02d", year, month + 1, dayOfMonth)
+                    showDatePicker = false // Cierra el diálogo
+                },
+                currentDate.get(Calendar.YEAR),
+                currentDate.get(Calendar.MONTH),
+                currentDate.get(Calendar.DAY_OF_MONTH)
+            ).show()
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Checkbox para activar notificaciones
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(text = selectedTime, color = Color.White)
+            Checkbox(
+                checked = notificationEnabled,
+                onCheckedChange = { notificationEnabled = it }
+            )
+            Text(text = stringResource(id = R.string.enable_notifications)) // Asegúrate de definir este string en strings.xml
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Área de texto para los detalles de la tarea
+        TextField(
+            value = taskContent,
+            onValueChange = { taskContent = it },
+            placeholder = { Text(text = stringResource(id = R.string.task_content_placeholder)) },
+            textStyle = TextStyle(fontSize = 18.sp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .heightIn(min = 200.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Íconos para agregar imagen y audio
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Image,
+                contentDescription = stringResource(id = R.string.add_image),
+                modifier = Modifier.size(48.dp)
+            )
+            Icon(
+                imageVector = Icons.Filled.Mic,
+                contentDescription = stringResource(id = R.string.add_audio),
+                modifier = Modifier.size(48.dp)
+            )
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun TaskContentField(taskContent: String, onContentChange: (String) -> Unit) {
-    TextField(
-        value = taskContent,
-        onValueChange = onContentChange,
-        placeholder = { Text(text = stringResource(id = R.string.details_placeholder)) },
-        textStyle = TextStyle(fontSize = 18.sp),
-        colors = TextFieldDefaults.textFieldColors(
-            containerColor = Color.White,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 200.dp)
-    )
-}
-
-@Composable
-fun AddMediaIcons() {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Image,
-            contentDescription = stringResource(id = R.string.add_image),
-            modifier = Modifier.size(48.dp)
-        )
-        Icon(
-            imageVector = Icons.Filled.Mic,
-            contentDescription = stringResource(id = R.string.add_audio),
-            modifier = Modifier.size(48.dp)
-        )
-    }
-}
-
-fun createDatePickerDialog(context: Context, calendar: Calendar, onDateSelected: (String) -> Unit): DatePickerDialog {
-    return DatePickerDialog(
-        context,
-        { _, year, month, dayOfMonth ->
-            onDateSelected("$dayOfMonth/${month + 1}/$year")
-        },
-        calendar.get(Calendar.YEAR),
-        calendar.get(Calendar.MONTH),
-        calendar.get(Calendar.DAY_OF_MONTH)
-    )
-}
-
-fun createTimePickerDialog(context: Context, calendar: Calendar, onTimeSelected: (String) -> Unit): TimePickerDialog {
-    return TimePickerDialog(
-        context,
-        { _, hour, minute ->
-            onTimeSelected(String.format("%02d:%02d", hour, minute))
-        },
-        calendar.get(Calendar.HOUR_OF_DAY),
-        calendar.get(Calendar.MINUTE),
-        true
-    )
 }

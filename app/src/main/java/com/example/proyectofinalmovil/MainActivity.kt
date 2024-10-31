@@ -83,10 +83,11 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier.padding(innerPadding)
                         ) {
                             composable("main_screen") { MainScreen(navController) }
-                            composable("notas") { NotesScreen(navController) } // Asegúrate de que la ruta sea correcta
+                            composable("notas_guardadas") { NotasGuardadas(navController) } // Cambia la ruta aquí
                             composable("tareas_guardadas") { TareasGuardadas(navController) }
                             composable("tasks_screen") { TasksScreen(navController) }
-                            composable("ajustes_screen") { AjustesActivity() } // Ruta para AjustesActivity
+                            composable("notas_screen") { NotesScreen(navController) }
+                            composable("ajustes_screen") { AjustesActivity() }
                         }
                     }
                 }
@@ -107,11 +108,11 @@ fun DrawerContent(navController: NavHostController, scope: CoroutineScope, drawe
 
         // Opción de Notas
         TextButton(onClick = {
-            navController.navigate("notas")
+            navController.navigate("notas_guardadas")
             scope.launch { drawerState.close() }
         }) {
             Icon(imageVector = Icons.Default.Note, contentDescription = "Notas", modifier = Modifier.padding(end = 8.dp))
-            Text("Notas")
+            Text(stringResource(id = R.string.notes)) // Asegúrate que esta línea sea correcta
         }
 
         // Opción de Tareas
@@ -120,16 +121,16 @@ fun DrawerContent(navController: NavHostController, scope: CoroutineScope, drawe
             scope.launch { drawerState.close() }
         }) {
             Icon(imageVector = Icons.Default.Task, contentDescription = "Tareas", modifier = Modifier.padding(end = 8.dp))
-            Text("Tareas")
+            Text(stringResource(id = R.string.tasks)) // Asegúrate que esta línea sea correcta
         }
 
         // Opción de Ajustes
         TextButton(onClick = {
-            navController.navigate("ajustes_screen") // Navega a AjustesActivity
+            navController.navigate("ajustes_screen")
             scope.launch { drawerState.close() }
         }) {
             Icon(imageVector = Icons.Default.Settings, contentDescription = "Ajustes", modifier = Modifier.padding(end = 8.dp))
-            Text("Ajustes")
+            Text(stringResource(id = R.string.settings)) // Asegúrate que esta línea sea correcta
         }
     }
 }
@@ -148,7 +149,7 @@ fun FloatingActionButtonsGroup(navController: NavHostController) {
         // Botón "Nota"
         AnimatedVisibility(visible = expanded) {
             FloatingActionButton(
-                onClick = { navController.navigate("notas") }, // Cambia la ruta aquí
+                onClick = { navController.navigate("notas_screen") },
                 modifier = Modifier.padding(bottom = 60.dp),
                 containerColor = Color(0xFFFFF59D), // Color amarillo
                 shape = CircleShape
@@ -288,13 +289,5 @@ fun TaskItem(task: String) {
             modifier = Modifier.padding(16.dp),
             color = Color.Black
         )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun DefaultPreview() {
-    ProyectoFinalMovilTheme {
-        MainScreen(rememberNavController())
     }
 }
