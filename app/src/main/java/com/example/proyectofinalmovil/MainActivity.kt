@@ -19,7 +19,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.proyectofinalmovil.nota.NotesScreen
+import com.example.proyectofinalmovil.nota.NotaScreen
 import com.example.proyectofinalmovil.nota.VerNotaScreen
 import com.example.proyectofinalmovil.tarea.TasksScreen
 import com.example.proyectofinalmovil.tarea.VerTareaScreen
@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
                             }
                             composable("notas_screen/{noteId}") { backStackEntry ->
                                 val noteId = backStackEntry.arguments?.getString("noteId")?.toIntOrNull()
-                                NotesScreen(navController, noteId)
+                                NotaScreen(navController, noteId)
                             }
                             // Composables para ver notas y tareas
                             composable("ver_nota_screen/{title}/{content}") { backStackEntry ->
