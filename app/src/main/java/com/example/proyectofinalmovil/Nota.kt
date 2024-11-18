@@ -1,10 +1,7 @@
 package com.example.proyectofinalmovil.nota
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import android.widget.Toast
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,153 +9,149 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import com.example.proyectofinalmovil.R
-import com.google.accompanist.insets.imePadding
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotesScreen(navController: NavHostController) {
+fun NotesScreen(
+    navController: NavHostController,
+    noteId: Int?,
+    isReadOnly: Boolean = false,
+    viewModel: NoteViewModel = viewModel(factory = NoteViewModelFactory(NoteRepository(NoteDatabase.getDatabase(LocalContext.current).noteDao())))
+) {
     var noteTitle by remember { mutableStateOf("") }
     var noteContent by remember { mutableStateOf("") }
-    var showMenu by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) } // Estado para el menú desplegable
+    val context = LocalContext.current
 
-    // Color de fondo y texto del tema actual
-    val backgroundColor = MaterialTheme.colorScheme.background
-    val textColor = MaterialTheme.colorScheme.onBackground
+    // Revisar si noteId es null o -1 (u otro indicador) para nueva nota
+    val isNewNote = noteId == null || noteId == 0
+
+    LaunchedEffect(noteId) {
+        if (!isNewNote) {
+            noteId?.let { id ->
+                val note = viewModel.getNoteById(id)
+                note?.let {
+                    noteTitle = it.title
+                    noteContent = it.content
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
             .padding(16.dp)
-            .verticalScroll(rememberScrollState())
-            .imePadding()
     ) {
-        // Barra superior: botón de regreso, título y menú de tres puntos
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Botón de regreso
-            Icon(
-                imageVector = Icons.Filled.ArrowBack,
-                contentDescription = stringResource(id = R.string.back_button), // Descripción internacionalizada
-                modifier = Modifier
-                    .size(24.dp)
-                    .clickable {
-                        navController.popBackStack() // Navegar de regreso
-                    }
-            )
-
-            // Título centrado
-            TextField(
-                value = noteTitle,
-                onValueChange = { noteTitle = it },
-                placeholder = { Text(text = stringResource(id = R.string.note_title_placeholder)) }, // Placeholder internacionalizado
-                textStyle = TextStyle(
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                ),
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 16.dp)
-            )
+            IconButton(onClick = { navController.popBackStack() }) {
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Regresar")
+            }
 
             // Menú de tres puntos
             Box {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = stringResource(id = R.string.menu), // Descripción internacionalizada
-                    modifier = Modifier
-                        .size(24.dp)
-                        .clickable {
-                            showMenu = !showMenu // Mostrar u ocultar el menú
-                        }
-                )
-
-                // DropdownMenu para guardar, borrar, compartir
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Más opciones")
+                }
                 DropdownMenu(
                     expanded = showMenu,
-                    onDismissRequest = { showMenu = false } // Cerrar el menú cuando se hace clic fuera
+                    onDismissRequest = { showMenu = false }
                 ) {
+                    // Opción de compartir
                     DropdownMenuItem(
-                        text = { Text(stringResource(id = R.string.save)) }, // Texto internacionalizado
                         onClick = {
-                            // Acción para guardar la nota
                             showMenu = false
-                            println("Guardar nota")
+                            Toast.makeText(context, "Compartiendo la nota...", Toast.LENGTH_SHORT).show()
                         },
-                        leadingIcon = {
-                            Icon(imageVector = Icons.Filled.Edit, contentDescription = null)
-                        }
+                        text = { Text("Compartir") }
                     )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(id = R.string.share)) }, // Texto internacionalizado
-                        onClick = {
-                            // Acción para compartir la nota
-                            showMenu = false
-                            println("Compartir nota")
-                        },
-                        leadingIcon = {
-                            Icon(imageVector = Icons.Filled.Share, contentDescription = null)
+                }
+            }
+
+            // Botón de guardar
+            if (!isReadOnly) {
+                IconButton(onClick = {
+                    if (noteTitle.isNotEmpty() && noteContent.isNotEmpty()) {
+                        if (!isNewNote) {
+                            // Actualizar una nota existente
+                            viewModel.update(Note(
+                                id = noteId ?: 0,
+                                title = noteTitle,
+                                content = noteContent
+                            ))
+                            Toast.makeText(context, "Nota actualizada", Toast.LENGTH_SHORT).show()
+                        } else {
+                            // Insertar una nueva nota
+                            viewModel.insert(Note(
+                                title = noteTitle,
+                                content = noteContent
+                            ))
+                            Toast.makeText(context, "Nota guardada", Toast.LENGTH_SHORT).show()
                         }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(id = R.string.delete)) }, // Texto internacionalizado
-                        onClick = {
-                            // Acción para borrar la nota
-                            showMenu = false
-                            println("Borrar nota")
-                        },
-                        leadingIcon = {
-                            Icon(imageVector = Icons.Filled.Delete, contentDescription = null)
-                        }
-                    )
+                        navController.popBackStack()
+                    } else {
+                        Toast.makeText(context, "Por favor completa todos los campos", Toast.LENGTH_SHORT).show()
+                    }
+                }) {
+                    Icon(imageVector = Icons.Default.Save, contentDescription = "Guardar")
                 }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Área de texto para los detalles de la nota
         TextField(
-            value = noteContent,
-            onValueChange = { noteContent = it },
-            placeholder = { Text(text = stringResource(id = R.string.note_content_placeholder)) }, // Placeholder internacionalizado
-            textStyle = TextStyle(fontSize = 18.sp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .heightIn(min = 200.dp)
+            value = noteTitle,
+            onValueChange = { if (!isReadOnly) noteTitle = it },
+            placeholder = { Text(text = "Título de la nota") },
+            modifier = Modifier.fillMaxWidth(),
+            readOnly = isReadOnly
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Íconos para agregar imagen y audio
+        TextField(
+            value = noteContent,
+            onValueChange = { if (!isReadOnly) noteContent = it },
+            placeholder = { Text(text = "Contenido de la nota") },
+            modifier = Modifier.fillMaxWidth(),
+            readOnly = isReadOnly
+        )
+
+        // Botones para añadir imagen y audio
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+            horizontalArrangement = Arrangement.SpaceAround
         ) {
-            Icon(
-                imageVector = Icons.Filled.Image,
-                contentDescription = stringResource(id = R.string.add_image), // Descripción internacionalizada
-                modifier = Modifier.size(48.dp)
-            )
-            Icon(
-                imageVector = Icons.Filled.Mic,
-                contentDescription = stringResource(id = R.string.add_audio), // Descripción internacionalizada
-                modifier = Modifier.size(48.dp)
-            )
+            // Botón para añadir imagen
+            IconButton(onClick = { /* Acción para añadir imagen */ },
+                modifier = Modifier.weight(1f).padding(8.dp),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0xFFBBDEFB))
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = Icons.Default.Image, contentDescription = "Añadir Imagen")
+                    Text(text = "Añadir Imagen", color = Color.Black)
+                }
+            }
+
+            // Botón para añadir audio
+            IconButton(onClick = { /* Acción para añadir audio */ },
+                modifier = Modifier.weight(1f).padding(8.dp),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0xFFFFF59D))
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = Icons.Default.Mic, contentDescription = "Añadir Audio")
+                    Text(text = "Añadir Audio", color = Color.Black)
+                }
+            }
         }
     }
 }
