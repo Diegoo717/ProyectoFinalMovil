@@ -60,7 +60,6 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.5.0")
     implementation("com.google.accompanist:accompanist-insets:0.30.0")
     implementation ("androidx.navigation:navigation-compose:<latest-version>")
-
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
@@ -70,6 +69,12 @@ dependencies {
     implementation(libs.androidx.navigation.runtime.ktx)
     implementation(libs.androidx.room.common)
     implementation(libs.androidx.room.ktx)
+    implementation ("androidx.core:core-ktx:1.10.1")
+    implementation ("androidx.activity:activity-compose:1.8.0")
+    implementation ("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.2")
+    implementation ("androidx.core:core:1.12.0")
+    implementation ("io.coil-kt:coil-compose:2.2.2")
+
 
 // Dependencias para Room
     implementation("androidx.room:room-runtime:2.6.1")

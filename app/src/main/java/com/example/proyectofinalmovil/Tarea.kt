@@ -1,12 +1,19 @@
 package com.example.proyectofinalmovil.tarea
 
+import android.provider.Settings
+import com.example.proyectofinalmovil.NotificationReceiver
 import android.Manifest
+import android.app.AlarmManager
 import android.app.DatePickerDialog
+import android.app.PendingIntent
 import android.app.TimePickerDialog
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.media.MediaRecorder
+import android.media.audiofx.BassBoost
+import android.os.Build
 import android.os.Environment
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -32,7 +40,7 @@ import java.util.*
 @Composable
 fun TasksScreen(
     navController: NavHostController,
-    taskId: Int?,
+    taskId: Int? = null,
     viewModel: TaskViewModel = viewModel(factory = TaskViewModelFactory(TaskRepository(TaskDatabase.getDatabase(LocalContext.current).taskDao())))
 ) {
     var taskTitle by remember { mutableStateOf("") }
@@ -69,25 +77,26 @@ fun TasksScreen(
     // Estado para saber si estamos reproduciendo
     var isPlaying by remember { mutableStateOf(false) }
 
-    // Función para comenzar la grabación
     fun startRecording() {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            return
-        }
-        try {
-            mediaRecorder = MediaRecorder().apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
-                setOutputFile(audioFilePath)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
-                prepare()
-                start()
+        // Verificamos si el permiso ya ha sido otorgado
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                mediaRecorder = MediaRecorder().apply {
+                    setAudioSource(MediaRecorder.AudioSource.MIC)
+                    setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
+                    setOutputFile(audioFilePath)
+                    setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
+                    prepare()
+                    start()
+                }
+                isRecording = true // Marcamos que estamos grabando
+                Toast.makeText(context, "Grabando...", Toast.LENGTH_SHORT).show()
+            } catch (e: IOException) {
+                Toast.makeText(context, "Error al iniciar la grabación", Toast.LENGTH_SHORT).show()
             }
-            isRecording = true // Marcamos que estamos grabando
-            Toast.makeText(context, "Grabando...", Toast.LENGTH_SHORT).show()
-        } catch (e: IOException) {
-            Toast.makeText(context, "Error al iniciar la grabación", Toast.LENGTH_SHORT).show()
+        } else {
+            // Si no se tiene el permiso, lo solicitamos
+            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -98,7 +107,7 @@ fun TasksScreen(
             release()
         }
         mediaRecorder = null
-        isRecording = false // Marcamos que ya no estamos grabando
+        isRecording = false
     }
 
     // Función para reproducir el audio
@@ -109,11 +118,11 @@ fun TasksScreen(
                 prepare()
                 start()
             }
-            isPlaying = true // Marcamos que estamos reproduciendo
+            isPlaying = true
             Toast.makeText(context, "Reproduciendo...", Toast.LENGTH_SHORT).show()
             mediaPlayer?.setOnCompletionListener {
                 it.release()
-                isPlaying = false // Restauramos el estado de reproducción al finalizar
+                isPlaying = false
             }
         } catch (e: IOException) {
             Toast.makeText(context, "Error al reproducir el audio", Toast.LENGTH_SHORT).show()
@@ -127,13 +136,11 @@ fun TasksScreen(
             release()
         }
         mediaPlayer = null
-        isPlaying = false // Restauramos el estado de reproducción al detenerse
+        isPlaying = false
         Toast.makeText(context, "Reproducción detenida", Toast.LENGTH_SHORT).show()
     }
 
-    // Revisar si noteId es null o -1 (u otro indicador) para nueva nota
-    val isNewNote = taskId == null || taskId == 0
-
+    // Cargar tarea existente si taskId no es nulo
     LaunchedEffect(taskId) {
         if (!isNewTask) {
             taskId?.let { id ->
@@ -170,20 +177,11 @@ fun TasksScreen(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
-                    // Opción de compartir
-                    DropdownMenuItem(
-                        onClick = {
-                            showMenu = false
-                            Toast.makeText(context, "Compartiendo la tarea...", Toast.LENGTH_SHORT).show()
-                        },
-                        text = { Text("Compartir") }
-                    )
                     // Opción de activar notificación con checkbox
                     DropdownMenuItem(
                         onClick = {
                             isNotificationEnabled = !isNotificationEnabled
                             showMenu = false
-                            Toast.makeText(context, if (isNotificationEnabled) "Notificación activada" else "Notificación desactivada", Toast.LENGTH_SHORT).show()
                         },
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -191,7 +189,7 @@ fun TasksScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Checkbox(
                                     checked = isNotificationEnabled,
-                                    onCheckedChange = null // Evitar que el Checkbox sea clickeable por separado
+                                    onCheckedChange = null
                                 )
                             }
                         }
@@ -202,23 +200,23 @@ fun TasksScreen(
             // Botón de guardar
             IconButton(onClick = {
                 if (taskTitle.isNotEmpty() && taskContent.isNotEmpty() && taskDate.isNotEmpty() && taskTime.isNotEmpty()) {
+                    val task = Task(
+                        id = taskId ?: 0,
+                        title = taskTitle,
+                        content = taskContent,
+                        date = taskDate,
+                        time = taskTime
+                    )
                     if (!isNewTask) {
-                        viewModel.update(Task(
-                            id = taskId ?: 0,
-                            title = taskTitle,
-                            content = taskContent,
-                            date = taskDate,
-                            time = taskTime
-                        ))
+                        viewModel.update(task)
                         Toast.makeText(context, "Tarea actualizada", Toast.LENGTH_SHORT).show()
                     } else {
-                        viewModel.insert(Task(
-                            title = taskTitle,
-                            content = taskContent,
-                            date = taskDate,
-                            time = taskTime
-                        ))
+                        viewModel.insert(task)
                         Toast.makeText(context, "Tarea guardada", Toast.LENGTH_SHORT).show()
+                    }
+                    // Programar la notificación si está habilitada
+                    if (isNotificationEnabled) {
+                        scheduleNotification(context, taskTitle, taskDate, taskTime)
                     }
                     navController.popBackStack()
                 } else {
@@ -249,6 +247,7 @@ fun TasksScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Botones para añadir imagen y audio
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceAround
@@ -304,13 +303,12 @@ fun TasksScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Mejora del diseño de los botones de selección de fecha y hora
         Button(
             onClick = { showDatePicker(context) { selectedDate -> taskDate = selectedDate } },
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2), contentColor = Color.White)
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
         ) {
-            Text(text = if (taskDate.isEmpty()) "Seleccionar Fecha" else taskDate)
+            Text(if (taskDate.isNotEmpty()) taskDate else "Seleccionar fecha")
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -318,30 +316,90 @@ fun TasksScreen(
         Button(
             onClick = { showTimePicker(context) { selectedTime -> taskTime = selectedTime } },
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2), contentColor = Color.White)
+            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
         ) {
-            Text(text = if (taskTime.isEmpty()) "Seleccionar Hora" else taskTime)
+            Text(if (taskTime.isNotEmpty()) taskTime else "Seleccionar hora")
         }
     }
 }
 
-private fun showDatePicker(context: Context, onDateSelected: (String) -> Unit) {
+fun showDatePicker(context: Context, onDateSelected: (String) -> Unit) {
     val calendar = Calendar.getInstance()
-    val year = calendar.get(Calendar.YEAR)
-    val month = calendar.get(Calendar.MONTH)
-    val day = calendar.get(Calendar.DAY_OF_MONTH)
-
-    DatePickerDialog(context, { _, selectedYear, selectedMonth, selectedDay ->
-        onDateSelected("$selectedDay/${selectedMonth + 1}/$selectedYear")
-    }, year, month, day).show()
+    val datePickerDialog = DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            val formattedDate = "$dayOfMonth/${month + 1}/$year"
+            onDateSelected(formattedDate)
+        },
+        calendar.get(Calendar.YEAR),
+        calendar.get(Calendar.MONTH),
+        calendar.get(Calendar.DAY_OF_MONTH)
+    )
+    datePickerDialog.show()
 }
 
-private fun showTimePicker(context: Context, onTimeSelected: (String) -> Unit) {
+fun showTimePicker(context: Context, onTimeSelected: (String) -> Unit) {
     val calendar = Calendar.getInstance()
-    val hour = calendar.get(Calendar.HOUR_OF_DAY)
-    val minute = calendar.get(Calendar.MINUTE)
+    val timePickerDialog = TimePickerDialog(
+        context,
+        { _, hourOfDay, minute ->
+            val formattedTime = "${if (hourOfDay < 10) "0" else ""}$hourOfDay:${if (minute < 10) "0" else ""}$minute"
+            onTimeSelected(formattedTime)
+        },
+        calendar.get(Calendar.HOUR_OF_DAY),
+        calendar.get(Calendar.MINUTE),
+        true
+    )
+    timePickerDialog.show()
+}
 
-    TimePickerDialog(context, { _, selectedHour, selectedMinute ->
-        onTimeSelected(String.format("%02d:%02d", selectedHour, selectedMinute))
-    }, hour, minute, true).show()
+
+// Función para programar la notificación
+fun scheduleNotification(context: Context, taskTitle: String, taskDate: String, taskTime: String) {
+    // Verificar si se tiene el permiso para programar alarmas exactas
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (!context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()) {
+            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+            context.startActivity(intent)
+            return
+        }
+    }
+
+    val calendar = Calendar.getInstance()
+    val dateParts = taskDate.split("/")
+    val timeParts = taskTime.split(":")
+
+    // Establecer la fecha y hora de la notificación
+    calendar.set(Calendar.DAY_OF_MONTH, dateParts[0].toInt())
+    calendar.set(Calendar.MONTH, dateParts[1].toInt() - 1)
+    calendar.set(Calendar.YEAR, dateParts[2].toInt())
+    calendar.set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
+    calendar.set(Calendar.MINUTE, timeParts[1].toInt())
+    calendar.set(Calendar.SECOND, 0)
+
+    // Verificar que la fecha y hora no sean en el pasado
+    if (calendar.timeInMillis < System.currentTimeMillis()) {
+        Toast.makeText(context, "La hora seleccionada ya pasó", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    // Crear el Intent para disparar la notificación
+    val intent = Intent(context, NotificationReceiver::class.java).apply {
+        putExtra("taskTitle", taskTitle)
+    }
+
+    // Crear un PendingIntent para que se ejecute cuando el AlarmManager dispare la notificación
+    val pendingIntent = PendingIntent.getBroadcast(
+        context,
+        0,
+        intent,
+        PendingIntent.FLAG_IMMUTABLE
+    )
+
+    // Obtener una instancia de AlarmManager
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+    // Programar la notificación para que se dispare a la hora seleccionada
+    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
+
 }

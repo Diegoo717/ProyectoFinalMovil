@@ -24,8 +24,8 @@
     import androidx.navigation.NavHostController
     import java.io.File
     import java.io.IOException
+    import coil.compose.rememberAsyncImagePainter
 
-    //
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
@@ -140,6 +140,46 @@
             }
         }
 
+        // Variable para almacenar la URI de la imagen seleccionada
+        val imageUri = remember { mutableStateOf<String?>(null) }
+
+        // Lanzador para seleccionar una imagen de la galería
+        val pickImageLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent()
+        ) { uri ->
+            if (uri != null) {
+                imageUri.value = uri.toString()
+                Toast.makeText(context, "Imagen seleccionada", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        // Lanzador para manejar permisos de galería
+        val requestGalleryPermissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+            onResult = { isGranted ->
+                if (isGranted) {
+                    pickImageLauncher.launch("image/*")
+                } else {
+                    Toast.makeText(context, "Permiso de galería denegado", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+
+        // Función para verificar el permiso de la galería
+        fun checkGalleryPermission() {
+            val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                Manifest.permission.READ_MEDIA_IMAGES // Android 13 y superiores
+            } else {
+                Manifest.permission.READ_EXTERNAL_STORAGE // Android 12 y anteriores
+            }
+
+            if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
+                requestGalleryPermissionLauncher.launch(permission)
+            } else {
+                pickImageLauncher.launch("image/*")
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -180,18 +220,22 @@
                         if (noteTitle.isNotEmpty() && noteContent.isNotEmpty()) {
                             if (!isNewNote) {
                                 // Actualizar una nota existente
-                                viewModel.update(Note(
-                                    id = noteId ?: 0,
-                                    title = noteTitle,
-                                    content = noteContent
-                                ))
+                                viewModel.update(
+                                    Note(
+                                        id = noteId ?: 0,
+                                        title = noteTitle,
+                                        content = noteContent
+                                    )
+                                )
                                 Toast.makeText(context, "Nota actualizada", Toast.LENGTH_SHORT).show()
                             } else {
                                 // Insertar una nueva nota
-                                viewModel.insert(Note(
-                                    title = noteTitle,
-                                    content = noteContent
-                                ))
+                                viewModel.insert(
+                                    Note(
+                                        title = noteTitle,
+                                        content = noteContent
+                                    )
+                                )
                                 Toast.makeText(context, "Nota guardada", Toast.LENGTH_SHORT).show()
                             }
                             navController.popBackStack()
@@ -224,14 +268,38 @@
                 readOnly = isReadOnly
             )
 
+            // Mostrar la imagen seleccionada, si existe
+            imageUri.value?.let { uri ->
+                Spacer(modifier = Modifier.height(16.dp))
+                androidx.compose.foundation.Image(
+                    painter = rememberAsyncImagePainter(uri),
+                    contentDescription = "Imagen seleccionada",
+                    modifier = Modifier
+                        .height(200.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .align(Alignment.CenterHorizontally) // Centrar horizontalmente
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
             // Botones para añadir imagen y audio
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
                 // Botón para añadir imagen
-                IconButton(onClick = { /* Acción para añadir imagen */ },
-                    modifier = Modifier.weight(1f).padding(8.dp),
+                IconButton(
+                    onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                            checkGalleryPermission()
+                        } else {
+                            pickImageLauncher.launch("image/*")
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(8.dp), // Ajusta el tamaño del botón para la galería
                     colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0xFFBBDEFB))
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -240,14 +308,17 @@
                 }
 
                 // Botón para añadir audio (con cambio de color según grabación)
-                IconButton(onClick = {
-                    if (mediaRecorder == null) {
-                        startRecording()
-                    } else {
-                        stopRecording()
-                    }
-                },
-                    modifier = Modifier.weight(1f).padding(8.dp),
+                IconButton(
+                    onClick = {
+                        if (mediaRecorder == null) {
+                            startRecording()
+                        } else {
+                            stopRecording()
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(8.dp), // Ajusta el tamaño del botón de grabación
                     colors = IconButtonDefaults.iconButtonColors(
                         containerColor = if (isRecording) Color.Red else Color(0xFFFFF59D) // Rojo si estamos grabando
                     )
@@ -262,14 +333,17 @@
                     targetValue = if (isPlaying) Color.Green else Color(0xFFFFF59D) // Verde si está reproduciendo
                 )
 
-                IconButton(onClick = {
-                    if (isPlaying) {
-                        stopPlaying()
-                    } else {
-                        startPlaying()
-                    }
-                },
-                    modifier = Modifier.weight(1f).padding(8.dp),
+                IconButton(
+                    onClick = {
+                        if (isPlaying) {
+                            stopPlaying()
+                        } else {
+                            startPlaying()
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(8.dp), // Ajusta el tamaño del botón de reproducción
                     colors = IconButtonDefaults.iconButtonColors(containerColor = buttonColor)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -278,6 +352,7 @@
                 }
             }
         }
+
     }
 
 
