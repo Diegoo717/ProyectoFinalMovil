@@ -1,359 +1,515 @@
-    package com.example.proyectofinalmovil.nota
+package com.example.proyectofinalmovil.nota
 
-    import android.Manifest
-    import android.content.pm.PackageManager
-    import android.media.MediaPlayer
-    import android.media.MediaRecorder
-    import android.os.Environment
-    import android.widget.Toast
-    import androidx.activity.compose.rememberLauncherForActivityResult
-    import androidx.activity.result.contract.ActivityResultContracts
-    import androidx.compose.animation.animateColorAsState
-    import androidx.compose.foundation.layout.*
-    import androidx.compose.material.icons.Icons
-    import androidx.compose.material.icons.filled.*
-    import androidx.compose.material3.*
-    import androidx.compose.runtime.*
-    import androidx.compose.ui.Alignment
-    import androidx.compose.ui.Modifier
-    import androidx.compose.ui.graphics.Color
-    import androidx.compose.ui.platform.LocalContext
-    import androidx.compose.ui.unit.dp
-    import androidx.core.content.ContextCompat
-    import androidx.lifecycle.viewmodel.compose.viewModel
-    import androidx.navigation.NavHostController
-    import java.io.File
-    import java.io.IOException
-    import coil.compose.rememberAsyncImagePainter
+import androidx.core.content.FileProvider
+import android.widget.VideoView
+import androidx.activity.result.contract.ActivityResultContracts.TakePicture
+import androidx.activity.result.contract.ActivityResultContracts.TakeVideo
+import androidx.compose.ui.viewinterop.AndroidView
+import android.Manifest
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
+import android.media.MediaRecorder
+import android.net.Uri
+import android.os.Environment
+import android.util.Log
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import java.io.File
+import java.io.IOException
+import androidx.compose.foundation.Image
+import coil.compose.rememberAsyncImagePainter
 
-    @OptIn(ExperimentalMaterial3Api::class)
-    @Composable
-    fun NotaScreen(
-        navController: NavHostController,
-        noteId: Int?,
-        isReadOnly: Boolean = false,
-        viewModel: NoteViewModel = viewModel(factory = NoteViewModelFactory(NoteRepository(NoteDatabase.getDatabase(LocalContext.current).noteDao())))
-    ) {
-        var noteTitle by remember { mutableStateOf("") }
-        var noteContent by remember { mutableStateOf("") }
-        var showMenu by remember { mutableStateOf(false) } // Estado para el menú desplegable
-        val context = LocalContext.current
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NotaScreen(
+    navController: NavHostController,
+    noteId: Int?,
+    isReadOnly: Boolean = false,
+    viewModel: NoteViewModel = viewModel(factory = NoteViewModelFactory(NoteRepository(NoteDatabase.getDatabase(LocalContext.current).noteDao())))
+) {
+    var noteTitle by remember { mutableStateOf("") }
+    var noteContent by remember { mutableStateOf("") }
+    var showMenu by remember { mutableStateOf(false) } // Estado para el menú desplegable
+    val context = LocalContext.current
 
-        // Variables de MediaRecorder y MediaPlayer
-        var mediaRecorder: MediaRecorder? by remember { mutableStateOf(null) }
-        var mediaPlayer: MediaPlayer? by remember { mutableStateOf(null) }
+    // Variables de MediaRecorder y MediaPlayer
+    var mediaRecorder: MediaRecorder? by remember { mutableStateOf(null) }
+    var mediaPlayer: MediaPlayer? by remember { mutableStateOf(null) }
 
-        // Ruta para guardar el archivo de audio
-        val audioFilePath = "${context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)}/nota_audio.3gp"
+    // Ruta para guardar el archivo de audio
+    val audioFilePath = "${context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)}/nota_audio.3gp"
 
-        // Solicitador de permisos
-        val requestPermissionLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission(),
-            onResult = { isGranted ->
-                if (!isGranted) {
-                    Toast.makeText(context, "Permiso denegado", Toast.LENGTH_SHORT).show()
+    // Solicitador de permisos
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            if (!isGranted) {
+                Toast.makeText(context, "Permiso denegado", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    // Estado para saber si estamos grabando
+    var isRecording by remember { mutableStateOf(false) }
+
+    // Estado para saber si estamos reproduciendo
+    var isPlaying by remember { mutableStateOf(false) }
+
+    var mediaUri by remember { mutableStateOf<String?>(null) }
+    var isVideo by remember { mutableStateOf(false) }
+
+    // Estado para el archivo temporal de la captura
+    var tempMediaUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Lanzador para tomar una foto
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = TakePicture(),
+        onResult = { success ->
+            if (success) {
+                tempMediaUri?.let { uri ->
+                    mediaUri = uri.toString()
+                    isVideo = false
+                    Toast.makeText(context, "Imagen capturada correctamente", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(context, "No se pudo capturar la imagen", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    // Lanzador para grabar un video
+    val takeVideoLauncher = rememberLauncherForActivityResult(
+        contract = TakeVideo(),
+        onResult = { uri ->
+            if (uri != null) {
+                mediaUri = uri.toString()
+                isVideo = true
+                Toast.makeText(context, "Video capturado correctamente", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "No se pudo grabar el video", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    // Estado para mostrar el diálogo de selección de cámara
+    var showDialog by remember { mutableStateOf(false) }
+
+    // Solicitar el permiso de la cámara
+    val requestCameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            if (isGranted) {
+                showDialog = true
+            } else {
+                Toast.makeText(context, "Permiso de cámara denegado", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    // Función para verificar y solicitar el permiso de cámara
+    fun checkCameraPermission() {
+        val permission = Manifest.permission.CAMERA
+        if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
+            requestCameraPermissionLauncher.launch(permission)
+        } else {
+            showDialog = true
+        }
+    }
+
+    // Mostrar el cuadro de diálogo para elegir entre foto o video
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Seleccionar acción") },
+            text = { Text("¿Qué deseas hacer?") },
+            confirmButton = {
+                Button(onClick = {
+                    showDialog = false
+                    // Crear archivo para la foto y lanzar la cámara
+                    val photoFile = File(context.filesDir, "temp_photo.jpg")
+                    val photoUri = FileProvider.getUriForFile(
+                        context,
+                        "com.example.proyectofinalmovil.fileprovider",
+                        photoFile
+                    )
+                    tempMediaUri = photoUri
+                    takePictureLauncher.launch(photoUri)
+                }) {
+                    Text("Tomar foto")
+                }
+            },
+            dismissButton = {
+                Button(onClick = {
+                    showDialog = false
+                    // Crear archivo para el video y lanzar la grabación
+                    val videoFile = File(context.filesDir, "temp_video.mp4")
+                    val videoUri = FileProvider.getUriForFile(
+                        context,
+                        "com.example.proyectofinalmovil.fileprovider",
+                        videoFile
+                    )
+                    tempMediaUri = videoUri
+                    takeVideoLauncher.launch(videoUri)
+                }) {
+                    Text("Grabar video")
                 }
             }
         )
+    }
 
-        // Estado para saber si estamos grabando
-        var isRecording by remember { mutableStateOf(false) }
-
-        // Estado para saber si estamos reproduciendo
-        var isPlaying by remember { mutableStateOf(false) }
-
-        // Función para comenzar la grabación
-        fun startRecording() {
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                return
-            }
-            try {
-                mediaRecorder = MediaRecorder().apply {
-                    setAudioSource(MediaRecorder.AudioSource.MIC)
-                    setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
-                    setOutputFile(audioFilePath)
-                    setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
-                    prepare()
-                    start()
+    LaunchedEffect(noteId) {
+        if (noteId != null && noteId != 0) {
+            val note = viewModel.getNoteById(noteId)
+            note?.let {
+                noteTitle = it.title
+                noteContent = it.content
+                mediaUri = it.imageUri
+                if (!mediaUri.isNullOrEmpty()) {
+                    val type = context.contentResolver.getType(Uri.parse(mediaUri))
+                    isVideo = type?.startsWith("video") == true
                 }
-                isRecording = true // Marcamos que estamos grabando
-                Toast.makeText(context, "Grabando...", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Lanzador para seleccionar imagen o video
+    val pickMediaLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            // Mostrar el URI del archivo seleccionado (para depuración)
+            Toast.makeText(context, "Video URI: $uri", Toast.LENGTH_LONG).show()
+
+            val type = context.contentResolver.getType(uri)
+
+            // Verifica si el archivo es un video
+            isVideo = type?.startsWith("video") == true
+
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val extension = if (isVideo) ".mp4" else ".jpg" // Extensión según el tipo de archivo
+                val file = File(context.filesDir, "media_${System.currentTimeMillis()}$extension")
+                inputStream?.use { input ->
+                    file.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                mediaUri = file.absolutePath // Guarda la ruta del archivo (imagen o video)
+                Toast.makeText(
+                    context,
+                    if (isVideo) "Video guardado correctamente" else "Imagen guardada correctamente",
+                    Toast.LENGTH_SHORT
+                ).show()
             } catch (e: IOException) {
+                Toast.makeText(context, "Error al guardar el archivo", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Lanzador para manejar permisos de galería
+    val requestGalleryPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            if (isGranted) {
+                pickMediaLauncher.launch("*/*")
+            } else {
+                Toast.makeText(context, "Permiso de almacenamiento denegado", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    // Función para verificar el permiso de la galería
+    fun checkGalleryPermission() {
+        val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES // Android 13 y superiores
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE // Android 12 y anteriores
+        }
+
+        if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
+            requestGalleryPermissionLauncher.launch(permission)
+        } else {
+            pickMediaLauncher.launch("*/*")
+        }
+    }
+
+    // Funciones de grabación
+    fun startRecording() {
+        mediaRecorder = MediaRecorder().apply {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
+            setOutputFile(audioFilePath)
+            try {
+                prepare()
+                start()
+                isRecording = true
+            } catch (e: IOException) {
+                e.printStackTrace()
                 Toast.makeText(context, "Error al iniciar la grabación", Toast.LENGTH_SHORT).show()
             }
         }
+    }
 
-        // Función para detener la grabación
-        fun stopRecording() {
-            mediaRecorder?.apply {
-                stop()
-                release()
-            }
-            mediaRecorder = null
-            isRecording = false // Marcamos que ya no estamos grabando
-        }
-
-        // Función para reproducir el audio
-        fun startPlaying() {
+    fun stopRecording() {
+        mediaRecorder?.apply {
             try {
-                mediaPlayer = MediaPlayer().apply {
-                    setDataSource(audioFilePath)
-                    prepare()
-                    start()
-                }
-                isPlaying = true // Marcamos que estamos reproduciendo
-                Toast.makeText(context, "Reproduciendo...", Toast.LENGTH_SHORT).show()
-                mediaPlayer?.setOnCompletionListener {
-                    it.release()
-                    isPlaying = false // Restauramos el estado de reproducción al finalizar
-                }
+                stop()
+                reset()
+                release()
+                isRecording = false
+                Toast.makeText(context, "Grabación finalizada", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        mediaRecorder = null
+    }
+
+    // Funciones de reproducción
+    fun startPlaying() {
+        mediaPlayer = MediaPlayer().apply {
+            try {
+                setDataSource(audioFilePath)
+                prepare()
+                start()
+                isPlaying = true
             } catch (e: IOException) {
+                e.printStackTrace()
                 Toast.makeText(context, "Error al reproducir el audio", Toast.LENGTH_SHORT).show()
             }
         }
+    }
 
-        // Función para detener la reproducción
-        fun stopPlaying() {
-            mediaPlayer?.apply {
-                stop()
-                release()
-            }
-            mediaPlayer = null
-            isPlaying = false // Restauramos el estado de reproducción al detenerse
-            Toast.makeText(context, "Reproducción detenida", Toast.LENGTH_SHORT).show()
+    fun stopPlaying() {
+        mediaPlayer?.apply {
+            stop()
+            release()
+            isPlaying = false
         }
+        mediaPlayer = null
+    }
 
-        // Revisar si noteId es null o -1 (u otro indicador) para nueva nota
-        val isNewNote = noteId == null || noteId == 0
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = { navController.popBackStack() }) {
+                Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Regresar")
+            }
 
-        // Estado para la URI de la imagen seleccionada
-        var imageUri by remember { mutableStateOf<String?>(null) }
-
-        LaunchedEffect(noteId) {
-            if (!isNewNote) {
-                noteId?.let { id ->
-                    val note = viewModel.getNoteById(id)
-                    note?.let {
-                        noteTitle = it.title
-                        noteContent = it.content
-                        imageUri = it.imageUri // Cargamos la URI de la imagen guardada
-                    }
+            // Menú de tres puntos
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Más opciones")
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        onClick = {
+                            showMenu = false
+                            Toast.makeText(context, "Compartiendo la nota...", Toast.LENGTH_SHORT).show()
+                        },
+                        text = { Text("Compartir") }
+                    )
                 }
             }
-        }
 
-        //Lanzador para seleccionar la imagen
-        val pickImageLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.GetContent()
-        ) { uri ->
-            if (uri != null) {
-                try {
-                    val inputStream = context.contentResolver.openInputStream(uri)
-                    val file = File(context.filesDir, "imagen_${System.currentTimeMillis()}.jpg")
-                    inputStream?.use { input ->
-                        file.outputStream().use { output ->
-                            input.copyTo(output)
+            // Botón de guardar
+            if (!isReadOnly) {
+                IconButton(onClick = {
+                    if (noteTitle.isNotEmpty() && noteContent.isNotEmpty()) {
+                        if (noteId != null && noteId != 0) {
+                            viewModel.update(
+                                Note(
+                                    id = noteId,
+                                    title = noteTitle,
+                                    content = noteContent,
+                                    imageUri = mediaUri
+                                )
+                            )
+                            Toast.makeText(context, "Nota actualizada", Toast.LENGTH_SHORT).show()
+                        } else {
+                            viewModel.insert(
+                                Note(
+                                    title = noteTitle,
+                                    content = noteContent,
+                                    imageUri = mediaUri
+                                )
+                            )
+                            Toast.makeText(context, "Nota guardada", Toast.LENGTH_SHORT).show()
                         }
+                        navController.popBackStack()
+                    } else {
+                        Toast.makeText(context, "Por favor completa todos los campos", Toast.LENGTH_SHORT).show()
                     }
-                    imageUri = file.absolutePath // Guarda la ruta absoluta del archivo
-                    Toast.makeText(context, "Imagen guardada correctamente", Toast.LENGTH_SHORT).show()
-                } catch (e: IOException) {
-                    Toast.makeText(context, "Error al guardar la imagen", Toast.LENGTH_SHORT).show()
+                }) {
+                    Icon(imageVector = Icons.Default.Save, contentDescription = "Guardar")
                 }
             }
         }
 
-        // Lanzador para manejar permisos de galería
-        val requestGalleryPermissionLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission(),
-            onResult = { isGranted ->
-                if (isGranted) {
-                    pickImageLauncher.launch("image/*")
-                } else {
-                    Toast.makeText(context, "Permiso de galería denegado", Toast.LENGTH_SHORT).show()
-                }
-            }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        TextField(
+            value = noteTitle,
+            onValueChange = { if (!isReadOnly) noteTitle = it },
+            placeholder = { Text(text = "Título de la nota") },
+            modifier = Modifier.fillMaxWidth(),
+            readOnly = isReadOnly
         )
 
-        // Función para verificar el permiso de la galería
-        fun checkGalleryPermission() {
-            val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                Manifest.permission.READ_MEDIA_IMAGES // Android 13 y superiores
-            } else {
-                Manifest.permission.READ_EXTERNAL_STORAGE // Android 12 y anteriores
-            }
+        Spacer(modifier = Modifier.height(8.dp))
 
-            if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
-                requestGalleryPermissionLauncher.launch(permission)
+        TextField(
+            value = noteContent,
+            onValueChange = { if (!isReadOnly) noteContent = it },
+            placeholder = { Text(text = "Contenido de la nota") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Mostrar la imagen o video seleccionado
+        mediaUri?.let {
+            if (isVideo) {
+                // Usar AndroidView para integrar el VideoView
+                AndroidView(
+                    factory = { context ->
+                        VideoView(context).apply {
+                            try {
+                                // Establecer la URI del video
+                                setVideoURI(Uri.parse(it))  // Verifica que la URI sea válida
+                                start()
+                                setOnErrorListener { mp, what, extra ->
+                                    // Log de error si ocurre algún problema con el video
+                                    Log.e("VideoViewError", "Error en VideoView: $what, $extra")
+                                    false
+                                }
+                            } catch (e: Exception) {
+                                // Log de error si hay un problema al configurar el VideoView
+                                Log.e("VideoViewError", "Error al configurar el VideoView: ${e.message}")
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth() // Ocupa todo el ancho disponible
+                        .heightIn(max = 250.dp) // Limita la altura máxima del video
+                        .widthIn(max = 350.dp)  // Limita el ancho máximo del video
+                        .aspectRatio(16 / 9f)  // Ajusta la relación de aspecto
+                )
             } else {
-                pickImageLauncher.launch("image/*")
+                // Mostrar imagen
+                Image(painter = rememberAsyncImagePainter(it), contentDescription = "Imagen seleccionada", modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 250.dp)  // Limita la altura máxima de la imagen
+                    .widthIn(max = 350.dp)   // Limita el ancho máximo de la imagen
+                )
             }
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+
+
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Botones para grabar o reproducir audio
+        Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+
+            IconButton(
+                onClick = { checkCameraPermission() },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(8.dp)
             ) {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Regresar")
-                }
-
-                // Menú de tres puntos
-                Box {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(imageVector = Icons.Default.MoreVert, contentDescription = "Más opciones")
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        // Opción de compartir
-                        DropdownMenuItem(
-                            onClick = {
-                                showMenu = false
-                                Toast.makeText(context, "Compartiendo la nota...", Toast.LENGTH_SHORT).show()
-                            },
-                            text = { Text("Compartir") }
-                        )
-                    }
-                }
-
-                // Botón de guardar
-                if (!isReadOnly) {
-                    IconButton(onClick = {
-                        if (noteTitle.isNotEmpty() && noteContent.isNotEmpty()) {
-                            if (!isNewNote) {
-                                // Actualizar una nota existente
-                                viewModel.update(
-                                    Note(
-                                        id = noteId ?: 0,
-                                        title = noteTitle,
-                                        content = noteContent,
-                                        imageUri = imageUri // Guardamos la URI de la imagen
-                                    )
-                                )
-                                Toast.makeText(context, "Nota actualizada", Toast.LENGTH_SHORT).show()
-                            } else {
-                                // Insertar una nueva nota
-                                viewModel.insert(
-                                    Note(
-                                        title = noteTitle,
-                                        content = noteContent,
-                                        imageUri = imageUri // Guardamos la URI de la imagen
-                                    )
-                                )
-                                Toast.makeText(context, "Nota guardada", Toast.LENGTH_SHORT).show()
-                            }
-                            navController.popBackStack()
-                        } else {
-                            Toast.makeText(context, "Por favor completa todos los campos", Toast.LENGTH_SHORT).show()
-                        }
-                    }) {
-                        Icon(imageVector = Icons.Default.Save, contentDescription = "Guardar")
-                    }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = Icons.Default.CameraAlt, contentDescription = "Abrir cámara")
+                    Text(text = "Cámara", style = MaterialTheme.typography.labelSmall)
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            TextField(
-                value = noteTitle,
-                onValueChange = { if (!isReadOnly) noteTitle = it },
-                placeholder = { Text(text = "Título de la nota") },
-                modifier = Modifier.fillMaxWidth(),
-                readOnly = isReadOnly
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            TextField(
-                value = noteContent,
-                onValueChange = { if (!isReadOnly) noteContent = it },
-                placeholder = { Text(text = "Contenido de la nota") },
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Mostrar la imagen seleccionada, si existe
-            imageUri?.let { uri ->
-                Spacer(modifier = Modifier.height(16.dp))
-                androidx.compose.foundation.Image(
-                    painter = rememberAsyncImagePainter(File(uri)),
-                    contentDescription = "Imagen seleccionada",
-                    modifier = Modifier
-                        .height(200.dp)
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .align(Alignment.CenterHorizontally)
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            // Botones para añadir imagen y audio
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                // Botón para añadir imagen
+            // Botón para seleccionar imagen o video
+            if (!isReadOnly) {
                 IconButton(
                     onClick = { checkGalleryPermission() },
                     modifier = Modifier
                         .weight(1f)
                         .padding(8.dp),
-                    colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0xFFBBDEFB))
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Default.Image, contentDescription = "Seleccionar Imagen")
-                    }
+
+                    ) { Column(horizontalAlignment = Alignment.CenterHorizontally){
+                    Icon(imageVector = Icons.Default.AddPhotoAlternate, contentDescription = "Seleccionar imagen o video")
                 }
+            }
 
-                // Botón para añadir audio (con cambio de color según grabación)
-                IconButton(
-                    onClick = {
-                        if (isRecording) stopRecording() else startRecording()
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(8.dp),
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = if (isRecording) Color.Red else Color(0xFFFFF59D)
-                    )
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Default.Mic, contentDescription = "Grabar Audio")
+            // Botón de grabación
+            val recordButtonColor by animateColorAsState(
+                targetValue = if (isRecording) Color.Red else Color(0xFFFFF59D)
+            )
+
+            IconButton(
+                onClick = {
+                    if (isRecording) {
+                        stopRecording()
+                    } else {
+                        startRecording()
                     }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(8.dp),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = recordButtonColor)
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = Icons.Default.Mic, contentDescription = "Grabar Audio")
                 }
+            }
 
-                // Botón para reproducir audio con animación de color
-                val buttonColor by animateColorAsState(
-                    targetValue = if (isPlaying) Color.Green else Color(0xFFFFF59D)
-                )
+            // Botón de reproducción
+            val playButtonColor by animateColorAsState(
+                targetValue = if (isPlaying) Color.Green else Color(0xFFFFF59D)
+            )
 
-                IconButton(
-                    onClick = {
-                        if (isPlaying) {
-                            stopPlaying()
-                        } else {
-                            startPlaying()
-                        }
-                    },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(8.dp),
-                    colors = IconButtonDefaults.iconButtonColors(containerColor = buttonColor)
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Reproducir Audio")
+            IconButton(
+                onClick = {
+                    if (isPlaying) {
+                        stopPlaying()
+                    } else {
+                        startPlaying()
                     }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(8.dp),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = playButtonColor)
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Reproducir Audio")
                 }
             }
         }
     }
+}
+}

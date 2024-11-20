@@ -13,12 +13,18 @@ import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.media.audiofx.BassBoost
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.util.Log
 import android.widget.Toast
+import android.widget.VideoView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.TakePicture
+import androidx.activity.result.contract.ActivityResultContracts.TakeVideo
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -29,8 +35,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import coil.compose.rememberAsyncImagePainter
@@ -78,6 +86,184 @@ fun TasksScreen(
 
     // Estado para saber si estamos reproduciendo
     var isPlaying by remember { mutableStateOf(false) }
+
+    var mediaUri by remember { mutableStateOf<String?>(null) }
+    var isVideo by remember { mutableStateOf(false) }
+
+    // Estado para el archivo temporal de la captura
+    var tempMediaUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Lanzador para tomar una foto
+    val takePictureLauncher = rememberLauncherForActivityResult(
+        contract = TakePicture(),
+        onResult = { success ->
+            if (success) {
+                tempMediaUri?.let { uri ->
+                    mediaUri = uri.toString()
+                    isVideo = false
+                    Toast.makeText(context, "Imagen capturada correctamente", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(context, "No se pudo capturar la imagen", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    // Lanzador para grabar un video
+    val takeVideoLauncher = rememberLauncherForActivityResult(
+        contract = TakeVideo(),
+        onResult = { uri ->
+            if (uri != null) {
+                mediaUri = uri.toString()
+                isVideo = true
+                Toast.makeText(context, "Video capturado correctamente", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "No se pudo grabar el video", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    // Estado para mostrar el diálogo de selección de cámara
+    var showDialog by remember { mutableStateOf(false) }
+
+    // Solicitar el permiso de la cámara
+    val requestCameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            if (isGranted) {
+                showDialog = true
+            } else {
+                Toast.makeText(context, "Permiso de cámara denegado", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    // Función para verificar y solicitar el permiso de cámara
+    fun checkCameraPermission() {
+        val permission = Manifest.permission.CAMERA
+        if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
+            requestCameraPermissionLauncher.launch(permission)
+        } else {
+            showDialog = true
+        }
+    }
+
+    // Mostrar el cuadro de diálogo para elegir entre foto o video
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Seleccionar acción") },
+            text = { Text("¿Qué deseas hacer?") },
+            confirmButton = {
+                Button(onClick = {
+                    showDialog = false
+                    // Crear archivo para la foto y lanzar la cámara
+                    val photoFile = File(context.filesDir, "temp_photo.jpg")
+                    val photoUri = FileProvider.getUriForFile(
+                        context,
+                        "com.example.proyectofinalmovil.fileprovider",
+                        photoFile
+                    )
+                    tempMediaUri = photoUri
+                    takePictureLauncher.launch(photoUri)
+                }) {
+                    Text("Tomar foto")
+                }
+            },
+            dismissButton = {
+                Button(onClick = {
+                    showDialog = false
+                    // Crear archivo para el video y lanzar la grabación
+                    val videoFile = File(context.filesDir, "temp_video.mp4")
+                    val videoUri = FileProvider.getUriForFile(
+                        context,
+                        "com.example.proyectofinalmovil.fileprovider",
+                        videoFile
+                    )
+                    tempMediaUri = videoUri
+                    takeVideoLauncher.launch(videoUri)
+                }) {
+                    Text("Grabar video")
+                }
+            }
+        )
+    }
+
+    LaunchedEffect(taskId) {
+        if (taskId != null && taskId != 0) {
+            val note = viewModel.getTaskById(taskId)
+            note?.let {
+                taskTitle = it.title
+                taskContent = it.content
+                mediaUri = it.imageUri
+                if (!mediaUri.isNullOrEmpty()) {
+                    val type = context.contentResolver.getType(Uri.parse(mediaUri))
+                    isVideo = type?.startsWith("video") == true
+                }
+            }
+        }
+    }
+
+    // Lanzador para seleccionar imagen o video
+    val pickMediaLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            // Mostrar el URI del archivo seleccionado (para depuración)
+            Toast.makeText(context, "Video URI: $uri", Toast.LENGTH_LONG).show()
+
+            val type = context.contentResolver.getType(uri)
+
+            // Verifica si el archivo es un video
+            isVideo = type?.startsWith("video") == true
+
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val extension = if (isVideo) ".mp4" else ".jpg" // Extensión según el tipo de archivo
+                val file = File(context.filesDir, "media_${System.currentTimeMillis()}$extension")
+                inputStream?.use { input ->
+                    file.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                mediaUri = file.absolutePath // Guarda la ruta del archivo (imagen o video)
+                Toast.makeText(
+                    context,
+                    if (isVideo) "Video guardado correctamente" else "Imagen guardada correctamente",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (e: IOException) {
+                Toast.makeText(context, "Error al guardar el archivo", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Lanzador para manejar permisos de galería
+    val requestGalleryPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            if (isGranted) {
+                pickMediaLauncher.launch("*/*")
+            } else {
+                Toast.makeText(context, "Permiso de almacenamiento denegado", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    // Función para verificar el permiso de la galería
+    fun checkGalleryPermission() {
+        val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES // Android 13 y superiores
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE // Android 12 y anteriores
+        }
+
+        if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
+            requestGalleryPermissionLauncher.launch(permission)
+        } else {
+            pickMediaLauncher.launch("*/*")
+        }
+    }
 
     fun startRecording() {
         // Verificamos si el permiso ya ha sido otorgado
@@ -145,7 +331,6 @@ fun TasksScreen(
     // Variable para almacenar la URI de la imagen seleccionada
     var imageUri = remember { mutableStateOf<String?>(null) }
 
-    // Cargar tarea existente si taskId no es nulo
     LaunchedEffect(taskId) {
         if (!isNewTask) {
             taskId?.let { id ->
@@ -155,7 +340,7 @@ fun TasksScreen(
                     taskContent = it.content
                     taskDate = it.date
                     taskTime = it.time
-                    imageUri.value = it.imageUri // Cargar la ruta de la imagen guardada
+                    mediaUri = it.imageUri // Usar mediaUri en lugar de imageUri.value
                 }
             }
         }
@@ -179,33 +364,6 @@ fun TasksScreen(
             } catch (e: IOException) {
                 Toast.makeText(context, "Error al guardar la imagen", Toast.LENGTH_SHORT).show()
             }
-        }
-    }
-
-    // Lanzador para manejar permisos de galería
-    val requestGalleryPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted ->
-            if (isGranted) {
-                pickImageLauncher.launch("image/*")
-            } else {
-                Toast.makeText(context, "Permiso de galería denegado", Toast.LENGTH_SHORT).show()
-            }
-        }
-    )
-
-    // Función para verificar el permiso de la galería
-    fun checkGalleryPermission() {
-        val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES // Android 13 y superiores
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE // Android 12 y anteriores
-        }
-
-        if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
-            requestGalleryPermissionLauncher.launch(permission)
-        } else {
-            pickImageLauncher.launch("image/*")
         }
     }
 
@@ -251,30 +409,38 @@ fun TasksScreen(
                 }
             }
 
-            // Botón de guardar
             IconButton(onClick = {
+                // Validar que todos los campos necesarios no estén vacíos
                 if (taskTitle.isNotEmpty() && taskContent.isNotEmpty() && taskDate.isNotEmpty() && taskTime.isNotEmpty()) {
+                    // Crear o actualizar la tarea con todos los campos necesarios
                     val task = Task(
                         id = taskId ?: 0,
                         title = taskTitle,
                         content = taskContent,
                         date = taskDate,
                         time = taskTime,
-                        imageUri = imageUri.value // Guarda la ruta de la imagen
+                        imageUri = mediaUri // Usar la variable que almacena la URI de imagen/video
                     )
+
                     if (!isNewTask) {
+                        // Actualizar la tarea existente
                         viewModel.update(task)
                         Toast.makeText(context, "Tarea actualizada", Toast.LENGTH_SHORT).show()
                     } else {
+                        // Insertar una nueva tarea
                         viewModel.insert(task)
                         Toast.makeText(context, "Tarea guardada", Toast.LENGTH_SHORT).show()
                     }
+
                     // Programar la notificación si está habilitada
                     if (isNotificationEnabled) {
                         scheduleNotification(context, taskTitle, taskDate, taskTime)
                     }
+
+                    // Navegar hacia atrás después de guardar
                     navController.popBackStack()
                 } else {
+                    // Mostrar mensaje de error si algún campo está vacío
                     Toast.makeText(context, "Por favor completa todos los campos", Toast.LENGTH_SHORT).show()
                 }
             }) {
@@ -302,17 +468,42 @@ fun TasksScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Mostrar la imagen seleccionada, si existe
-        imageUri.value?.let { uri ->
-            androidx.compose.foundation.Image(
-                painter = rememberAsyncImagePainter(File(uri)),
-                contentDescription = "Imagen seleccionada",
-                modifier = Modifier
-                    .height(200.dp)
+        // Mostrar la imagen o video seleccionado
+        mediaUri?.let {
+            if (isVideo) {
+                // Usar AndroidView para integrar el VideoView
+                AndroidView(
+                    factory = { context ->
+                        VideoView(context).apply {
+                            try {
+                                // Establecer la URI del video
+                                setVideoURI(Uri.parse(it))  // Verifica que la URI sea válida
+                                start()
+                                setOnErrorListener { mp, what, extra ->
+                                    // Log de error si ocurre algún problema con el video
+                                    Log.e("VideoViewError", "Error en VideoView: $what, $extra")
+                                    false
+                                }
+                            } catch (e: Exception) {
+                                // Log de error si hay un problema al configurar el VideoView
+                                Log.e("VideoViewError", "Error al configurar el VideoView: ${e.message}")
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth() // Ocupa todo el ancho disponible
+                        .heightIn(max = 250.dp) // Limita la altura máxima del video
+                        .widthIn(max = 350.dp)  // Limita el ancho máximo del video
+                        .aspectRatio(16 / 9f)  // Ajusta la relación de aspecto
+                )
+            } else {
+                // Mostrar imagen
+                Image(painter = rememberAsyncImagePainter(it), contentDescription = "Imagen seleccionada", modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .align(Alignment.CenterHorizontally)
-            )
+                    .heightIn(max = 250.dp)  // Limita la altura máxima de la imagen
+                    .widthIn(max = 350.dp)   // Limita el ancho máximo de la imagen
+                )
+            }
         }
 
         // Botones para añadir imagen y audio
@@ -320,6 +511,19 @@ fun TasksScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceAround
         ) {
+
+            IconButton(
+                onClick = { checkCameraPermission() },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(8.dp)
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = Icons.Default.CameraAlt, contentDescription = "Abrir cámara")
+                    Text(text = "Cámara", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+
             // Botón para añadir imagen
             IconButton(
                 onClick = {
