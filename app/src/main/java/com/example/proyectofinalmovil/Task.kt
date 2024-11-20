@@ -9,5 +9,7 @@ data class Task(
     val title: String,
     val content: String,
     val date: String, // Campo para la fecha
-    val time: String  // Campo para la hora
+    val time: String,  // Campo para la hora
+    val imageUri: String? = null,
+    val audioUri: String? = null
 )

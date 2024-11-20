@@ -26,7 +26,6 @@
     import java.io.IOException
     import coil.compose.rememberAsyncImagePainter
 
-
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun NotaScreen(
@@ -128,6 +127,9 @@
         // Revisar si noteId es null o -1 (u otro indicador) para nueva nota
         val isNewNote = noteId == null || noteId == 0
 
+        // Estado para la URI de la imagen seleccionada
+        var imageUri by remember { mutableStateOf<String?>(null) }
+
         LaunchedEffect(noteId) {
             if (!isNewNote) {
                 noteId?.let { id ->
@@ -135,21 +137,30 @@
                     note?.let {
                         noteTitle = it.title
                         noteContent = it.content
+                        imageUri = it.imageUri // Cargamos la URI de la imagen guardada
                     }
                 }
             }
         }
 
-        // Variable para almacenar la URI de la imagen seleccionada
-        val imageUri = remember { mutableStateOf<String?>(null) }
-
-        // Lanzador para seleccionar una imagen de la galería
+        //Lanzador para seleccionar la imagen
         val pickImageLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent()
         ) { uri ->
             if (uri != null) {
-                imageUri.value = uri.toString()
-                Toast.makeText(context, "Imagen seleccionada", Toast.LENGTH_SHORT).show()
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val file = File(context.filesDir, "imagen_${System.currentTimeMillis()}.jpg")
+                    inputStream?.use { input ->
+                        file.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    imageUri = file.absolutePath // Guarda la ruta absoluta del archivo
+                    Toast.makeText(context, "Imagen guardada correctamente", Toast.LENGTH_SHORT).show()
+                } catch (e: IOException) {
+                    Toast.makeText(context, "Error al guardar la imagen", Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
@@ -224,7 +235,8 @@
                                     Note(
                                         id = noteId ?: 0,
                                         title = noteTitle,
-                                        content = noteContent
+                                        content = noteContent,
+                                        imageUri = imageUri // Guardamos la URI de la imagen
                                     )
                                 )
                                 Toast.makeText(context, "Nota actualizada", Toast.LENGTH_SHORT).show()
@@ -233,7 +245,8 @@
                                 viewModel.insert(
                                     Note(
                                         title = noteTitle,
-                                        content = noteContent
+                                        content = noteContent,
+                                        imageUri = imageUri // Guardamos la URI de la imagen
                                     )
                                 )
                                 Toast.makeText(context, "Nota guardada", Toast.LENGTH_SHORT).show()
@@ -264,21 +277,22 @@
                 value = noteContent,
                 onValueChange = { if (!isReadOnly) noteContent = it },
                 placeholder = { Text(text = "Contenido de la nota") },
-                modifier = Modifier.fillMaxWidth(),
-                readOnly = isReadOnly
+                modifier = Modifier.fillMaxWidth()
             )
 
+            Spacer(modifier = Modifier.height(8.dp))
+
             // Mostrar la imagen seleccionada, si existe
-            imageUri.value?.let { uri ->
+            imageUri?.let { uri ->
                 Spacer(modifier = Modifier.height(16.dp))
                 androidx.compose.foundation.Image(
-                    painter = rememberAsyncImagePainter(uri),
+                    painter = rememberAsyncImagePainter(File(uri)),
                     contentDescription = "Imagen seleccionada",
                     modifier = Modifier
                         .height(200.dp)
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
-                        .align(Alignment.CenterHorizontally) // Centrar horizontalmente
+                        .align(Alignment.CenterHorizontally)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -290,47 +304,37 @@
             ) {
                 // Botón para añadir imagen
                 IconButton(
-                    onClick = {
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                            checkGalleryPermission()
-                        } else {
-                            pickImageLauncher.launch("image/*")
-                        }
-                    },
+                    onClick = { checkGalleryPermission() },
                     modifier = Modifier
                         .weight(1f)
-                        .padding(8.dp), // Ajusta el tamaño del botón para la galería
+                        .padding(8.dp),
                     colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0xFFBBDEFB))
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Default.Image, contentDescription = "Añadir Imagen")
+                        Icon(imageVector = Icons.Default.Image, contentDescription = "Seleccionar Imagen")
                     }
                 }
 
                 // Botón para añadir audio (con cambio de color según grabación)
                 IconButton(
                     onClick = {
-                        if (mediaRecorder == null) {
-                            startRecording()
-                        } else {
-                            stopRecording()
-                        }
+                        if (isRecording) stopRecording() else startRecording()
                     },
                     modifier = Modifier
                         .weight(1f)
-                        .padding(8.dp), // Ajusta el tamaño del botón de grabación
+                        .padding(8.dp),
                     colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = if (isRecording) Color.Red else Color(0xFFFFF59D) // Rojo si estamos grabando
+                        containerColor = if (isRecording) Color.Red else Color(0xFFFFF59D)
                     )
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(imageVector = Icons.Default.Mic, contentDescription = "Añadir Audio")
+                        Icon(imageVector = Icons.Default.Mic, contentDescription = "Grabar Audio")
                     }
                 }
 
                 // Botón para reproducir audio con animación de color
                 val buttonColor by animateColorAsState(
-                    targetValue = if (isPlaying) Color.Green else Color(0xFFFFF59D) // Verde si está reproduciendo
+                    targetValue = if (isPlaying) Color.Green else Color(0xFFFFF59D)
                 )
 
                 IconButton(
@@ -343,7 +347,7 @@
                     },
                     modifier = Modifier
                         .weight(1f)
-                        .padding(8.dp), // Ajusta el tamaño del botón de reproducción
+                        .padding(8.dp),
                     colors = IconButtonDefaults.iconButtonColors(containerColor = buttonColor)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -352,7 +356,4 @@
                 }
             }
         }
-
     }
-
-

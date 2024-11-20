@@ -43,7 +43,7 @@ class NotificationReceiver : BroadcastReceiver() {
         val builder = NotificationCompat.Builder(context, "TASKS_CHANNEL_ID")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Recordatorio de Tarea")
-            .setContentText("Tienes una tarea pendiente: $taskTitle")
+            .setContentText("Tienes una tarea pendiente :)")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
 

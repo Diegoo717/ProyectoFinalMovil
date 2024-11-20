@@ -37,4 +37,26 @@ class NoteViewModel(private val repository: NoteRepository) : ViewModel() {
             repository.delete(note)
         }
     }
+
+    // Función para agregar una imagen a una nota
+    fun addImageToNote(noteId: Int, imageUri: String) {
+        viewModelScope.launch {
+            val note = getNoteById(noteId)
+            if (note != null) {
+                val updatedNote = note.copy(imageUri = imageUri)
+                update(updatedNote)
+            }
+        }
+    }
+
+    // Función para agregar un archivo de audio a una nota
+    fun addAudioToNote(noteId: Int, audioUri: String) {
+        viewModelScope.launch {
+            val note = getNoteById(noteId)
+            if (note != null) {
+                val updatedNote = note.copy(audioUri = audioUri)
+                update(updatedNote)
+            }
+        }
+    }
 }

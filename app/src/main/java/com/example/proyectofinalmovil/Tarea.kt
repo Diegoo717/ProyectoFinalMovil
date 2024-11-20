@@ -33,6 +33,8 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import coil.compose.rememberAsyncImagePainter
+import java.io.File
 import java.io.IOException
 import java.util.*
 
@@ -140,6 +142,9 @@ fun TasksScreen(
         Toast.makeText(context, "Reproducción detenida", Toast.LENGTH_SHORT).show()
     }
 
+    // Variable para almacenar la URI de la imagen seleccionada
+    var imageUri = remember { mutableStateOf<String?>(null) }
+
     // Cargar tarea existente si taskId no es nulo
     LaunchedEffect(taskId) {
         if (!isNewTask) {
@@ -150,8 +155,57 @@ fun TasksScreen(
                     taskContent = it.content
                     taskDate = it.date
                     taskTime = it.time
+                    imageUri.value = it.imageUri // Cargar la ruta de la imagen guardada
                 }
             }
+        }
+    }
+
+    //Lanzador para seleccionar la imagen
+    val pickImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val file = File(context.filesDir, "imagen_${System.currentTimeMillis()}.jpg")
+                inputStream?.use { input ->
+                    file.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                imageUri.value = file.absolutePath // Guarda la ruta absoluta del archivo
+                Toast.makeText(context, "Imagen guardada correctamente", Toast.LENGTH_SHORT).show()
+            } catch (e: IOException) {
+                Toast.makeText(context, "Error al guardar la imagen", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // Lanzador para manejar permisos de galería
+    val requestGalleryPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            if (isGranted) {
+                pickImageLauncher.launch("image/*")
+            } else {
+                Toast.makeText(context, "Permiso de galería denegado", Toast.LENGTH_SHORT).show()
+            }
+        }
+    )
+
+    // Función para verificar el permiso de la galería
+    fun checkGalleryPermission() {
+        val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES // Android 13 y superiores
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE // Android 12 y anteriores
+        }
+
+        if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
+            requestGalleryPermissionLauncher.launch(permission)
+        } else {
+            pickImageLauncher.launch("image/*")
         }
     }
 
@@ -205,7 +259,8 @@ fun TasksScreen(
                         title = taskTitle,
                         content = taskContent,
                         date = taskDate,
-                        time = taskTime
+                        time = taskTime,
+                        imageUri = imageUri.value // Guarda la ruta de la imagen
                     )
                     if (!isNewTask) {
                         viewModel.update(task)
@@ -247,14 +302,36 @@ fun TasksScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Mostrar la imagen seleccionada, si existe
+        imageUri.value?.let { uri ->
+            androidx.compose.foundation.Image(
+                painter = rememberAsyncImagePainter(File(uri)),
+                contentDescription = "Imagen seleccionada",
+                modifier = Modifier
+                    .height(200.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .align(Alignment.CenterHorizontally)
+            )
+        }
+
         // Botones para añadir imagen y audio
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceAround
         ) {
             // Botón para añadir imagen
-            IconButton(onClick = { /* Acción para añadir imagen */ },
-                modifier = Modifier.weight(1f).padding(8.dp),
+            IconButton(
+                onClick = {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                        checkGalleryPermission()
+                    } else {
+                        pickImageLauncher.launch("image/*")
+                    }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(8.dp), // Ajusta el tamaño del botón para la galería
                 colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0xFFBBDEFB))
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -263,14 +340,17 @@ fun TasksScreen(
             }
 
             // Botón para añadir audio (con cambio de color según grabación)
-            IconButton(onClick = {
-                if (mediaRecorder == null) {
-                    startRecording()
-                } else {
-                    stopRecording()
-                }
-            },
-                modifier = Modifier.weight(1f).padding(8.dp),
+            IconButton(
+                onClick = {
+                    if (mediaRecorder == null) {
+                        startRecording()
+                    } else {
+                        stopRecording()
+                    }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(8.dp), // Ajusta el tamaño del botón de grabación
                 colors = IconButtonDefaults.iconButtonColors(
                     containerColor = if (isRecording) Color.Red else Color(0xFFFFF59D) // Rojo si estamos grabando
                 )
@@ -285,14 +365,17 @@ fun TasksScreen(
                 targetValue = if (isPlaying) Color.Green else Color(0xFFFFF59D) // Verde si está reproduciendo
             )
 
-            IconButton(onClick = {
-                if (isPlaying) {
-                    stopPlaying()
-                } else {
-                    startPlaying()
-                }
-            },
-                modifier = Modifier.weight(1f).padding(8.dp),
+            IconButton(
+                onClick = {
+                    if (isPlaying) {
+                        stopPlaying()
+                    } else {
+                        startPlaying()
+                    }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(8.dp), // Ajusta el tamaño del botón de reproducción
                 colors = IconButtonDefaults.iconButtonColors(containerColor = buttonColor)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
