@@ -393,129 +393,234 @@ fun NotaScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Mostrar las imágenes o videos seleccionados
-        mediaUris?.let {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items(it) { mediaUri ->
-                    if (isVideo) {
-                        // Usar AndroidView para integrar el VideoView
-                        AndroidView(
-                            factory = { context ->
-                                VideoView(context).apply {
-                                    try {
-                                        // Establecer la URI del video
-                                        setVideoURI(Uri.parse(mediaUri))  // Verifica que la URI sea válida
-                                        start()
-                                        setOnErrorListener { _, what, extra ->
-                                            Log.e("VideoViewError", "Error en VideoView: $what, $extra")
-                                            false
+        // Función auxiliar para determinar si la URI es un video
+        fun isVideo(uri: String): Boolean {
+            return uri.endsWith(".mp4", ignoreCase = true) ||
+                    uri.endsWith(".avi", ignoreCase = true) ||
+                    uri.endsWith(".mov", ignoreCase = true) ||
+                    uri.endsWith(".mkv", ignoreCase = true)
+        }
+
+        //Mostrar el contenido multimedia
+        // Lista mutable para almacenar las URIs multimedia y controlar el estado
+        val mediaUrisState = remember { mutableStateListOf<String>() }
+
+        // Inicializamos mediaUrisState con mediaUris solo si no está vacía
+        LaunchedEffect(mediaUris) {
+            if (!mediaUris.isNullOrEmpty()) {
+                mediaUrisState.clear()
+                mediaUrisState.addAll(mediaUris)
+            }
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(mediaUrisState) { mediaUri ->
+                Log.d("MediaUris", "Procesando mediaUri: $mediaUri")
+
+                if (isVideo(mediaUri)) {
+                    Log.d("MediaUris", "El archivo es un video: $mediaUri")
+
+                    var isPlaying by remember { mutableStateOf(false) }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            AndroidView(
+                                factory = { context ->
+                                    VideoView(context).apply {
+                                        // Asegúrate de que la URI sea válida antes de cargarla
+                                        try {
+                                            Log.d("MediaUris", "Intentando cargar video desde URI: $mediaUri")
+                                            setVideoURI(Uri.parse(mediaUri))
+
+                                            setOnPreparedListener { mp ->
+                                                Log.d("MediaUris", "Video preparado con éxito: $mediaUri")
+                                                mp.setOnVideoSizeChangedListener { _, _, _ ->
+                                                    requestLayout()
+                                                }
+                                                pause() // Pausar por defecto después de prepararse
+                                            }
+
+                                            setOnCompletionListener {
+                                                Log.d("MediaUris", "Reproducción del video completada: $mediaUri")
+                                                isPlaying = false
+                                            }
+
+                                            setOnErrorListener { _, what, extra ->
+                                                Log.e("VideoViewError", "Error en VideoView para URI: $mediaUri, Error: $what, Extra: $extra")
+                                                false
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.e("VideoLoadError", "Excepción al cargar el video desde URI: $mediaUri, Error: ${e.message}")
                                         }
-                                    } catch (e: Exception) {
-                                        Log.e("VideoViewError", "Error al configurar el VideoView: ${e.message}")
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.8f) // Ajustar ancho para dejar espacio para el botón de eliminar
+                                    .heightIn(max = 250.dp)
+                                    .widthIn(max = 350.dp)
+                                    .aspectRatio(16 / 9f),
+                                update = { videoView ->
+                                    if (isPlaying) {
+                                        Log.d("MediaUris", "Iniciando reproducción del video: $mediaUri")
+                                        videoView.start()
+                                    } else {
+                                        Log.d("MediaUris", "Pausando reproducción del video: $mediaUri")
+                                        videoView.pause()
                                     }
                                 }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 250.dp)
-                                .widthIn(max = 350.dp)
-                                .aspectRatio(16 / 9f)
-                        )
-                    } else {
+                            )
+
+                            Button(
+                                onClick = {
+                                    isPlaying = !isPlaying
+                                    Log.d("MediaUris", if (isPlaying) "Reproduciendo video: $mediaUri" else "Pausando video: $mediaUri")
+                                },
+                                modifier = Modifier.padding(top = 8.dp)
+                            ) {
+                                Text(if (isPlaying) "Pausar" else "Reproducir")
+                            }
+                        }
+
+                        // Botón para eliminar el video
+                        IconButton(
+                            onClick = {
+                                Log.d("MediaUris", "Eliminando video: $mediaUri")
+                                mediaUrisState.remove(mediaUri)
+                            }
+                        ) {
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Eliminar Video")
+                        }
+                    }
+                } else {
+                    Log.d("MediaUris", "El archivo es una imagen: $mediaUri")
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         // Mostrar imagen
                         Image(
                             painter = rememberAsyncImagePainter(mediaUri),
                             contentDescription = "Imagen seleccionada",
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .fillMaxWidth(0.8f) // Ajustar ancho para dejar espacio para el botón de eliminar
                                 .heightIn(max = 250.dp)
                                 .widthIn(max = 350.dp)
                         )
+
+                        // Botón para eliminar la imagen
+                        IconButton(
+                            onClick = {
+                                Log.d("MediaUris", "Eliminando imagen: $mediaUri")
+                                mediaUrisState.remove(mediaUri)
+                            }
+                        ) {
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Eliminar Imagen")
+                        }
                     }
                 }
+            }
 
-                // Espaciador para separar elementos
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
+            // Espaciador para separar elementos
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
-                // Botones para grabar o reproducir audio
-                item {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth()
+            // Botones para grabar o reproducir audio y otras funcionalidades
+            item {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // Botón de cámara
+                    IconButton(
+                        onClick = {
+                            Log.d("Botones", "Clic en botón de cámara")
+                            checkCameraPermission()
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(8.dp)
                     ) {
-                        // Botón de cámara
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(imageVector = Icons.Default.CameraAlt, contentDescription = "Abrir cámara")
+                            Text(text = "Cámara", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+
+                    // Botón para seleccionar imagen o video
+                    if (!isReadOnly) {
                         IconButton(
-                            onClick = { checkCameraPermission() },
+                            onClick = {
+                                Log.d("Botones", "Clic en botón de galería")
+                                checkGalleryPermission()
+                            },
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(8.dp)
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(imageVector = Icons.Default.CameraAlt, contentDescription = "Abrir cámara")
-                                Text(text = "Cámara", style = MaterialTheme.typography.labelSmall)
+                                Icon(
+                                    imageVector = Icons.Default.AddPhotoAlternate,
+                                    contentDescription = "Seleccionar imagen o video"
+                                )
                             }
                         }
 
-                        // Botón para seleccionar imagen o video
-                        if (!isReadOnly) {
-                            IconButton(
-                                onClick = { checkGalleryPermission() },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(8.dp)
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(imageVector = Icons.Default.AddPhotoAlternate, contentDescription = "Seleccionar imagen o video")
+                        // Botón de grabación
+                        val recordButtonColor by animateColorAsState(
+                            targetValue = if (isRecording) Color.Red else Color(0xFFFFF59D)
+                        )
+
+                        IconButton(
+                            onClick = {
+                                if (isRecording) {
+                                    Log.d("Botones", "Clic en botón para detener grabación")
+                                    stopRecording()
+                                } else {
+                                    Log.d("Botones", "Clic en botón para iniciar grabación")
+                                    startRecording()
                                 }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(8.dp),
+                            colors = IconButtonDefaults.iconButtonColors(containerColor = recordButtonColor)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(imageVector = Icons.Default.Mic, contentDescription = "Grabar Audio")
                             }
+                        }
 
-                            // Botón de grabación
-                            val recordButtonColor by animateColorAsState(
-                                targetValue = if (isRecording) Color.Red else Color(0xFFFFF59D)
-                            )
+                        // Botón de reproducción de audio
+                        val playButtonColor by animateColorAsState(
+                            targetValue = if (isPlaying) Color.Green else Color(0xFFFFF59D)
+                        )
 
-                            IconButton(
-                                onClick = {
-                                    if (isRecording) {
-                                        stopRecording()
-                                    } else {
-                                        startRecording()
-                                    }
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(8.dp),
-                                colors = IconButtonDefaults.iconButtonColors(containerColor = recordButtonColor)
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(imageVector = Icons.Default.Mic, contentDescription = "Grabar Audio")
+                        IconButton(
+                            onClick = {
+                                if (isPlaying) {
+                                    Log.d("Botones", "Clic en botón para detener reproducción de audio")
+                                    stopPlaying()
+                                } else {
+                                    Log.d("Botones", "Clic en botón para iniciar reproducción de audio")
+                                    startPlaying()
                                 }
-                            }
-
-                            // Botón de reproducción
-                            val playButtonColor by animateColorAsState(
-                                targetValue = if (isPlaying) Color.Green else Color(0xFFFFF59D)
-                            )
-
-                            IconButton(
-                                onClick = {
-                                    if (isPlaying) {
-                                        stopPlaying()
-                                    } else {
-                                        startPlaying()
-                                    }
-                                },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(8.dp),
-                                colors = IconButtonDefaults.iconButtonColors(containerColor = playButtonColor)
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Reproducir Audio")
-                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(8.dp),
+                            colors = IconButtonDefaults.iconButtonColors(containerColor = playButtonColor)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Reproducir Audio")
                             }
                         }
                     }
