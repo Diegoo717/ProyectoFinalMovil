@@ -32,6 +32,8 @@ import androidx.navigation.NavHostController
 import java.io.File
 import java.io.IOException
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import coil.compose.rememberAsyncImagePainter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,7 +46,7 @@ fun NotaScreen(
 ) {
     var noteTitle by remember { mutableStateOf("") }
     var noteContent by remember { mutableStateOf("") }
-    var showMenu by remember { mutableStateOf(false) } // Estado para el menú desplegable
+    var showMenu by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Variables de MediaRecorder y MediaPlayer
@@ -54,7 +56,7 @@ fun NotaScreen(
     // Ruta para guardar el archivo de audio
     val audioFilePath = "${context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)}/nota_audio.3gp"
 
-    // Solicitador de permisos
+    // Estado para manejar los permisos
     val requestPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
@@ -70,7 +72,8 @@ fun NotaScreen(
     // Estado para saber si estamos reproduciendo
     var isPlaying by remember { mutableStateOf(false) }
 
-    var mediaUri by remember { mutableStateOf<String?>(null) }
+    // Estado para almacenar URIs de medios (imágenes y videos)
+    var mediaUris by remember { mutableStateOf<List<String>>(emptyList()) }
     var isVideo by remember { mutableStateOf(false) }
 
     // Estado para el archivo temporal de la captura
@@ -82,7 +85,7 @@ fun NotaScreen(
         onResult = { success ->
             if (success) {
                 tempMediaUri?.let { uri ->
-                    mediaUri = uri.toString()
+                    mediaUris = mediaUris + uri.toString()  // Agregar el URI a la lista
                     isVideo = false
                     Toast.makeText(context, "Imagen capturada correctamente", Toast.LENGTH_SHORT).show()
                 }
@@ -97,7 +100,7 @@ fun NotaScreen(
         contract = TakeVideo(),
         onResult = { uri ->
             if (uri != null) {
-                mediaUri = uri.toString()
+                mediaUris = mediaUris + uri.toString()  // Agregar el URI a la lista
                 isVideo = true
                 Toast.makeText(context, "Video capturado correctamente", Toast.LENGTH_SHORT).show()
             } else {
@@ -178,11 +181,7 @@ fun NotaScreen(
             note?.let {
                 noteTitle = it.title
                 noteContent = it.content
-                mediaUri = it.imageUri
-                if (!mediaUri.isNullOrEmpty()) {
-                    val type = context.contentResolver.getType(Uri.parse(mediaUri))
-                    isVideo = type?.startsWith("video") == true
-                }
+                mediaUris = it.mediaUris // Cargar las URIs almacenadas en la base de datos
             }
         }
     }
@@ -192,8 +191,8 @@ fun NotaScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            // Mostrar el URI del archivo seleccionado (para depuración)
-            Toast.makeText(context, "Video URI: $uri", Toast.LENGTH_LONG).show()
+            // Mostrar el URI del archivo seleccionado
+            Toast.makeText(context, "Archivo seleccionado: $uri", Toast.LENGTH_LONG).show()
 
             val type = context.contentResolver.getType(uri)
 
@@ -202,14 +201,14 @@ fun NotaScreen(
 
             try {
                 val inputStream = context.contentResolver.openInputStream(uri)
-                val extension = if (isVideo) ".mp4" else ".jpg" // Extensión según el tipo de archivo
+                val extension = if (isVideo) ".mp4" else ".jpg"
                 val file = File(context.filesDir, "media_${System.currentTimeMillis()}$extension")
                 inputStream?.use { input ->
                     file.outputStream().use { output ->
                         input.copyTo(output)
                     }
                 }
-                mediaUri = file.absolutePath // Guarda la ruta del archivo (imagen o video)
+                mediaUris = mediaUris + file.absolutePath // Agregar el URI a la lista
                 Toast.makeText(
                     context,
                     if (isVideo) "Video guardado correctamente" else "Imagen guardada correctamente",
@@ -236,9 +235,9 @@ fun NotaScreen(
     // Función para verificar el permiso de la galería
     fun checkGalleryPermission() {
         val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_IMAGES // Android 13 y superiores
+            Manifest.permission.READ_MEDIA_IMAGES
         } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE // Android 12 y anteriores
+            Manifest.permission.READ_EXTERNAL_STORAGE
         }
 
         if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
@@ -348,7 +347,7 @@ fun NotaScreen(
                                     id = noteId,
                                     title = noteTitle,
                                     content = noteContent,
-                                    imageUri = mediaUri
+                                    mediaUris = mediaUris // Guardar la lista de URIs
                                 )
                             )
                             Toast.makeText(context, "Nota actualizada", Toast.LENGTH_SHORT).show()
@@ -357,7 +356,7 @@ fun NotaScreen(
                                 Note(
                                     title = noteTitle,
                                     content = noteContent,
-                                    imageUri = mediaUri
+                                    mediaUris = mediaUris // Guardar la lista de URIs
                                 )
                             )
                             Toast.makeText(context, "Nota guardada", Toast.LENGTH_SHORT).show()
@@ -393,123 +392,135 @@ fun NotaScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Mostrar la imagen o video seleccionado
-        mediaUri?.let {
-            if (isVideo) {
-                // Usar AndroidView para integrar el VideoView
-                AndroidView(
-                    factory = { context ->
-                        VideoView(context).apply {
-                            try {
-                                // Establecer la URI del video
-                                setVideoURI(Uri.parse(it))  // Verifica que la URI sea válida
-                                start()
-                                setOnErrorListener { mp, what, extra ->
-                                    // Log de error si ocurre algún problema con el video
-                                    Log.e("VideoViewError", "Error en VideoView: $what, $extra")
-                                    false
+        // Mostrar las imágenes o videos seleccionados
+        mediaUris?.let {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(it) { mediaUri ->
+                    if (isVideo) {
+                        // Usar AndroidView para integrar el VideoView
+                        AndroidView(
+                            factory = { context ->
+                                VideoView(context).apply {
+                                    try {
+                                        // Establecer la URI del video
+                                        setVideoURI(Uri.parse(mediaUri))  // Verifica que la URI sea válida
+                                        start()
+                                        setOnErrorListener { _, what, extra ->
+                                            Log.e("VideoViewError", "Error en VideoView: $what, $extra")
+                                            false
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.e("VideoViewError", "Error al configurar el VideoView: ${e.message}")
+                                    }
                                 }
-                            } catch (e: Exception) {
-                                // Log de error si hay un problema al configurar el VideoView
-                                Log.e("VideoViewError", "Error al configurar el VideoView: ${e.message}")
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 250.dp)
+                                .widthIn(max = 350.dp)
+                                .aspectRatio(16 / 9f)
+                        )
+                    } else {
+                        // Mostrar imagen
+                        Image(
+                            painter = rememberAsyncImagePainter(mediaUri),
+                            contentDescription = "Imagen seleccionada",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 250.dp)
+                                .widthIn(max = 350.dp)
+                        )
+                    }
+                }
+
+                // Espaciador para separar elementos
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                // Botones para grabar o reproducir audio
+                item {
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Botón de cámara
+                        IconButton(
+                            onClick = { checkCameraPermission() },
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(8.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(imageVector = Icons.Default.CameraAlt, contentDescription = "Abrir cámara")
+                                Text(text = "Cámara", style = MaterialTheme.typography.labelSmall)
                             }
                         }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth() // Ocupa todo el ancho disponible
-                        .heightIn(max = 250.dp) // Limita la altura máxima del video
-                        .widthIn(max = 350.dp)  // Limita el ancho máximo del video
-                        .aspectRatio(16 / 9f)  // Ajusta la relación de aspecto
-                )
-            } else {
-                // Mostrar imagen
-                Image(painter = rememberAsyncImagePainter(it), contentDescription = "Imagen seleccionada", modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 250.dp)  // Limita la altura máxima de la imagen
-                    .widthIn(max = 350.dp)   // Limita el ancho máximo de la imagen
-                )
-            }
-        }
 
+                        // Botón para seleccionar imagen o video
+                        if (!isReadOnly) {
+                            IconButton(
+                                onClick = { checkGalleryPermission() },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(8.dp)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(imageVector = Icons.Default.AddPhotoAlternate, contentDescription = "Seleccionar imagen o video")
+                                }
+                            }
 
+                            // Botón de grabación
+                            val recordButtonColor by animateColorAsState(
+                                targetValue = if (isRecording) Color.Red else Color(0xFFFFF59D)
+                            )
 
+                            IconButton(
+                                onClick = {
+                                    if (isRecording) {
+                                        stopRecording()
+                                    } else {
+                                        startRecording()
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(8.dp),
+                                colors = IconButtonDefaults.iconButtonColors(containerColor = recordButtonColor)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(imageVector = Icons.Default.Mic, contentDescription = "Grabar Audio")
+                                }
+                            }
 
-        Spacer(modifier = Modifier.height(16.dp))
+                            // Botón de reproducción
+                            val playButtonColor by animateColorAsState(
+                                targetValue = if (isPlaying) Color.Green else Color(0xFFFFF59D)
+                            )
 
-        // Botones para grabar o reproducir audio
-        Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
-
-            IconButton(
-                onClick = { checkCameraPermission() },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(8.dp)
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(imageVector = Icons.Default.CameraAlt, contentDescription = "Abrir cámara")
-                    Text(text = "Cámara", style = MaterialTheme.typography.labelSmall)
-                }
-            }
-
-            // Botón para seleccionar imagen o video
-            if (!isReadOnly) {
-                IconButton(
-                    onClick = { checkGalleryPermission() },
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(8.dp),
-
-                    ) { Column(horizontalAlignment = Alignment.CenterHorizontally){
-                    Icon(imageVector = Icons.Default.AddPhotoAlternate, contentDescription = "Seleccionar imagen o video")
-                }
-            }
-
-            // Botón de grabación
-            val recordButtonColor by animateColorAsState(
-                targetValue = if (isRecording) Color.Red else Color(0xFFFFF59D)
-            )
-
-            IconButton(
-                onClick = {
-                    if (isRecording) {
-                        stopRecording()
-                    } else {
-                        startRecording()
+                            IconButton(
+                                onClick = {
+                                    if (isPlaying) {
+                                        stopPlaying()
+                                    } else {
+                                        startPlaying()
+                                    }
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(8.dp),
+                                colors = IconButtonDefaults.iconButtonColors(containerColor = playButtonColor)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Reproducir Audio")
+                                }
+                            }
+                        }
                     }
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(8.dp),
-                colors = IconButtonDefaults.iconButtonColors(containerColor = recordButtonColor)
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(imageVector = Icons.Default.Mic, contentDescription = "Grabar Audio")
-                }
-            }
-
-            // Botón de reproducción
-            val playButtonColor by animateColorAsState(
-                targetValue = if (isPlaying) Color.Green else Color(0xFFFFF59D)
-            )
-
-            IconButton(
-                onClick = {
-                    if (isPlaying) {
-                        stopPlaying()
-                    } else {
-                        startPlaying()
-                    }
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(8.dp),
-                colors = IconButtonDefaults.iconButtonColors(containerColor = playButtonColor)
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Reproducir Audio")
                 }
             }
         }
     }
-}
 }

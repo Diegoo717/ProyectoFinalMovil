@@ -37,4 +37,15 @@ class TaskViewModel(private val repository: TaskRepository) : ViewModel() {
             repository.delete(task)
         }
     }
+
+    // Función para agregar un archivo de audio a una nota
+    fun addAudioToNote(taskId: Int, audioUri: String) {
+        viewModelScope.launch {
+            val task = getTaskById(taskId)
+            if (task != null) {
+                val updatedNote = task.copy(audioUri = audioUri)
+                update(updatedNote)
+            }
+        }
+    }
 }

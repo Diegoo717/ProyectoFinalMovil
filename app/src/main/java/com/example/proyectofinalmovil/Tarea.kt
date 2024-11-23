@@ -69,7 +69,11 @@ fun TasksScreen(
     var mediaPlayer: MediaPlayer? by remember { mutableStateOf(null) }
 
     // Ruta para guardar el archivo de audio
-    val audioFilePath = "${context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)}/nota_audio.3gp"
+    val audioFilePath = if (taskId != null) {
+        "${context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)}/audio_note_$taskId.3gp"
+    } else {
+        "${context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)}/audio_note_temp.3gp"
+    }
 
     // Solicitador de permisos
     val requestPermissionLauncher = rememberLauncherForActivityResult(
@@ -92,6 +96,9 @@ fun TasksScreen(
 
     // Estado para el archivo temporal de la captura
     var tempMediaUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Variable para almacenar la URI del audio de la nota
+    var audioUri by remember { mutableStateOf<String?>(null) }
 
     // Lanzador para tomar una foto
     val takePictureLauncher = rememberLauncherForActivityResult(
@@ -195,6 +202,7 @@ fun TasksScreen(
             note?.let {
                 taskTitle = it.title
                 taskContent = it.content
+                audioUri = it.audioUri
                 mediaUri = it.imageUri
                 if (!mediaUri.isNullOrEmpty()) {
                     val type = context.contentResolver.getType(Uri.parse(mediaUri))
@@ -204,22 +212,20 @@ fun TasksScreen(
         }
     }
 
-    // Lanzador para seleccionar imagen o video
     val pickMediaLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            // Mostrar el URI del archivo seleccionado (para depuración)
+
             Toast.makeText(context, "Video URI: $uri", Toast.LENGTH_LONG).show()
 
             val type = context.contentResolver.getType(uri)
 
-            // Verifica si el archivo es un video
             isVideo = type?.startsWith("video") == true
 
             try {
                 val inputStream = context.contentResolver.openInputStream(uri)
-                val extension = if (isVideo) ".mp4" else ".jpg" // Extensión según el tipo de archivo
+                val extension = if (isVideo) ".mp4" else ".jpg"
                 val file = File(context.filesDir, "media_${System.currentTimeMillis()}$extension")
                 inputStream?.use { input ->
                     file.outputStream().use { output ->
@@ -265,67 +271,71 @@ fun TasksScreen(
         }
     }
 
+    // Funciones de grabación
     fun startRecording() {
-        // Verificamos si el permiso ya ha sido otorgado
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+        mediaRecorder = MediaRecorder().apply {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
+            setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
+            setOutputFile(audioFilePath) // Usar la ruta dinámica
             try {
-                mediaRecorder = MediaRecorder().apply {
-                    setAudioSource(MediaRecorder.AudioSource.MIC)
-                    setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
-                    setOutputFile(audioFilePath)
-                    setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
-                    prepare()
-                    start()
-                }
-                isRecording = true // Marcamos que estamos grabando
-                Toast.makeText(context, "Grabando...", Toast.LENGTH_SHORT).show()
-            } catch (e: IOException) {
-                Toast.makeText(context, "Error al iniciar la grabación", Toast.LENGTH_SHORT).show()
-            }
-        } else {
-            // Si no se tiene el permiso, lo solicitamos
-            requestPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
-    }
-
-    // Función para detener la grabación
-    fun stopRecording() {
-        mediaRecorder?.apply {
-            stop()
-            release()
-        }
-        mediaRecorder = null
-        isRecording = false
-    }
-
-    // Función para reproducir el audio
-    fun startPlaying() {
-        try {
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(audioFilePath)
                 prepare()
                 start()
+                isRecording = true
+            } catch (e: IOException) {
+                e.printStackTrace()
+                Toast.makeText(context, "Error al iniciar la grabación", Toast.LENGTH_SHORT).show()
             }
-            isPlaying = true
-            Toast.makeText(context, "Reproduciendo...", Toast.LENGTH_SHORT).show()
-            mediaPlayer?.setOnCompletionListener {
-                it.release()
-                isPlaying = false
-            }
-        } catch (e: IOException) {
-            Toast.makeText(context, "Error al reproducir el audio", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Función para detener la reproducción
+    fun stopRecording() {
+        mediaRecorder?.apply {
+            try {
+                stop()
+                reset()
+                release()
+                isRecording = false
+                audioUri = "file://$audioFilePath" // Asignar la URI al estado
+                Toast.makeText(context, "Grabación finalizada", Toast.LENGTH_SHORT).show()
+
+                // Si la nota tiene un ID, guarda el URI en la base de datos
+                taskId?.let { id ->
+                    viewModel.addAudioToNote(id, audioUri!!)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        mediaRecorder = null
+    }
+
+    // Funciones de reproducción
+    fun startPlaying() {
+        if (audioUri != null) {
+            mediaPlayer = MediaPlayer().apply {
+                try {
+                    setDataSource(context, Uri.parse(audioUri)) // Usar la URI almacenada
+                    prepare()
+                    start()
+                    isPlaying = true
+                } catch (e: IOException) {
+                    e.printStackTrace()
+                    Toast.makeText(context, "Error al reproducir el audio", Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else {
+            Toast.makeText(context, "No hay audio para esta nota", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun stopPlaying() {
         mediaPlayer?.apply {
             stop()
             release()
+            isPlaying = false
         }
         mediaPlayer = null
-        isPlaying = false
-        Toast.makeText(context, "Reproducción detenida", Toast.LENGTH_SHORT).show()
     }
 
     // Variable para almacenar la URI de la imagen seleccionada
@@ -340,6 +350,7 @@ fun TasksScreen(
                     taskContent = it.content
                     taskDate = it.date
                     taskTime = it.time
+                    audioUri = it.audioUri
                     mediaUri = it.imageUri // Usar mediaUri en lugar de imageUri.value
                 }
             }
@@ -409,6 +420,7 @@ fun TasksScreen(
                 }
             }
 
+            //Botón de guardado
             IconButton(onClick = {
                 // Validar que todos los campos necesarios no estén vacíos
                 if (taskTitle.isNotEmpty() && taskContent.isNotEmpty() && taskDate.isNotEmpty() && taskTime.isNotEmpty()) {
@@ -419,6 +431,7 @@ fun TasksScreen(
                         content = taskContent,
                         date = taskDate,
                         time = taskTime,
+                        audioUri = audioUri,
                         imageUri = mediaUri // Usar la variable que almacena la URI de imagen/video
                     )
 

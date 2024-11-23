@@ -1,5 +1,6 @@
 package com.example.proyectofinalmovil.nota
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -38,23 +39,29 @@ class NoteViewModel(private val repository: NoteRepository) : ViewModel() {
         }
     }
 
-    // Función para agregar una imagen a una nota
-    fun addImageToNote(noteId: Int, imageUri: String) {
+    // Función para agregar una imagen o video a una nota
+    fun addMediaToNote(noteId: Int, mediaUri: String) {
         viewModelScope.launch {
             val note = getNoteById(noteId)
             if (note != null) {
-                val updatedNote = note.copy(imageUri = imageUri)
+                val updatedMediaUris = note.mediaUris.toMutableList().apply {
+                    add(mediaUri) // Añadir el nuevo URI a la lista
+                }
+                val updatedNote = note.copy(mediaUris = updatedMediaUris)
                 update(updatedNote)
             }
         }
     }
 
-    // Función para agregar un archivo de audio a una nota
-    fun addAudioToNote(noteId: Int, audioUri: String) {
+    // Función para eliminar un archivo (imagen o video) de una nota
+    fun removeMediaFromNote(noteId: Int, mediaUri: String) {
         viewModelScope.launch {
             val note = getNoteById(noteId)
             if (note != null) {
-                val updatedNote = note.copy(audioUri = audioUri)
+                val updatedMediaUris = note.mediaUris.toMutableList().apply {
+                    remove(mediaUri) // Eliminar el URI de la lista
+                }
+                val updatedNote = note.copy(mediaUris = updatedMediaUris)
                 update(updatedNote)
             }
         }
