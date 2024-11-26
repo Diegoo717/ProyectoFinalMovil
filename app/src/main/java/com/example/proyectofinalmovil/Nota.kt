@@ -17,6 +17,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -33,8 +34,11 @@ import androidx.navigation.NavHostController
 import java.io.File
 import java.io.IOException
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.layout.ContentScale
 import coil.compose.rememberAsyncImagePainter
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,7 +77,7 @@ fun NotaScreen(
     var mediaUris by remember { mutableStateOf<List<String>>(emptyList()) }
     var isVideo by remember { mutableStateOf(false) }
 
-    // Estado para el archivo temporal de la captura
+    // Estado para el archivo de la captura
     var tempMediaUri by remember { mutableStateOf<Uri?>(null) }
 
     // Lanzador para tomar una foto
@@ -562,9 +566,7 @@ fun NotaScreen(
                                     }
                                 },
                                 modifier = Modifier
-                                    .fillMaxWidth(0.8f) // Ajustar ancho para dejar espacio para el botón de eliminar
-                                    .heightIn(max = 250.dp)
-                                    .widthIn(max = 350.dp)
+                                    .fillMaxWidth(0.8f) // Ajustar ancho
                                     .aspectRatio(16 / 9f),
                                 update = { videoView ->
                                     if (isPlaying) {
@@ -577,7 +579,6 @@ fun NotaScreen(
                                 }
                             )
 
-                            //Boton para reproducir el video
                             IconButton(
                                 onClick = {
                                     isPlaying = !isPlaying
@@ -592,7 +593,6 @@ fun NotaScreen(
                             }
                         }
 
-                        // Botón para eliminar el video
                         IconButton(
                             onClick = {
                                 Log.d("MediaUris", "Eliminando video: $mediaUri")
@@ -606,47 +606,68 @@ fun NotaScreen(
                 } else {
                     Log.d("MediaUris", "El archivo es una imagen: $mediaUri")
 
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        // Mostrar imagen
-                        Image(
-                            painter = rememberAsyncImagePainter(mediaUri),
-                            contentDescription = "Imagen seleccionada",
-                            modifier = Modifier
-                                .fillMaxWidth(0.8f) // Ajustar ancho para dejar espacio para el botón de eliminar
-                                .heightIn(max = 250.dp)
-                                .widthIn(max = 350.dp)
-                        )
+                        var isExpanded by remember { mutableStateOf(false) }
 
-                        // Botón para eliminar la imagen
-                        IconButton(
-                            onClick = {
-                                Log.d("MediaUris", "Eliminando imagen: $mediaUri")
-                                mediaUrisState.remove(mediaUri)
+                        if (isExpanded) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.8f))
+                                    .clickable { isExpanded = false },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(mediaUri),
+                                    contentDescription = "Imagen expandida",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 600.dp),
+                                    contentScale = ContentScale.Fit
+                                )
                             }
-                        ) {
-                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Eliminar Imagen")
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(mediaUri),
+                                    contentDescription = "Imagen seleccionada",
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.8f)
+                                        .heightIn(max = 250.dp)
+                                        .clickable { isExpanded = true },
+                                    contentScale = ContentScale.Crop
+                                )
+
+                                IconButton(
+                                    onClick = {
+                                        Log.d("MediaUris", "Eliminando imagen: $mediaUri")
+                                        mediaUrisState.remove(mediaUri)
+                                    }
+                                ) {
+                                    Icon(imageVector = Icons.Default.Delete, contentDescription = "Eliminar Imagen")
+                                }
+                            }
                         }
                     }
                 }
             }
 
-
-        // Espaciador para separar elementos
             item {
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Botones para grabar o reproducir audio y otras funcionalidades
             item {
                 Row(
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Botón de cámara
                     IconButton(
                         onClick = {
                             Log.d("Botones", "Clic en botón de cámara")
@@ -662,7 +683,6 @@ fun NotaScreen(
                         }
                     }
 
-                    // Botón para seleccionar imagen o video
                     if (!isReadOnly) {
                         IconButton(
                             onClick = {
@@ -674,14 +694,10 @@ fun NotaScreen(
                                 .padding(8.dp)
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    imageVector = Icons.Default.AddPhotoAlternate,
-                                    contentDescription = "Seleccionar imagen o video"
-                                )
+                                Icon(imageVector = Icons.Default.AddPhotoAlternate, contentDescription = "Seleccionar imagen o video")
                             }
                         }
 
-                        // Botón de grabación
                         val recordButtonColor by animateColorAsState(
                             targetValue = if (isRecording) Color.Red else Color(0xFFFFF59D)
                         )
