@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts.TakePicture
 import androidx.activity.result.contract.ActivityResultContracts.TakeVideo
 import androidx.compose.ui.viewinterop.AndroidView
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaPlayer
 import android.media.MediaRecorder
@@ -53,9 +54,6 @@ fun NotaScreen(
     var mediaRecorder: MediaRecorder? by remember { mutableStateOf(null) }
     var mediaPlayer: MediaPlayer? by remember { mutableStateOf(null) }
 
-    // Ruta para guardar el archivo de audio
-    val audioFilePath = "${context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)}/nota_audio.3gp"
-
     // Estado para manejar los permisos
     val requestPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
@@ -66,11 +64,10 @@ fun NotaScreen(
         }
     )
 
-    // Estado para saber si estamos grabando
-    var isRecording by remember { mutableStateOf(false) }
-
-    // Estado para saber si estamos reproduciendo
-    var isPlaying by remember { mutableStateOf(false) }
+    var isRecording = false
+    var isPlaying = false
+    var audioFilePath: String? = null
+    val audioFilesState = remember { mutableStateListOf<String>() }
 
     // Estado para almacenar URIs de medios (imágenes y videos)
     var mediaUris by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -181,7 +178,7 @@ fun NotaScreen(
             note?.let {
                 noteTitle = it.title
                 noteContent = it.content
-                mediaUris = it.mediaUris // Cargar las URIs almacenadas en la base de datos
+                mediaUris = it.mediaUris.distinct() // Elimina duplicados si ya existen
             }
         }
     }
@@ -248,12 +245,23 @@ fun NotaScreen(
     }
 
     // Funciones de grabación
-    fun startRecording() {
+    // Función para generar una ruta de archivo única para cada grabación
+    fun generateAudioFilePath(context: Context): String {
+        // Generar un nombre único usando el timestamp actual
+        return "${context.externalCacheDir?.absolutePath}/audio_${System.currentTimeMillis()}.3gp"
+    }
+
+    // Funciones de grabación
+    fun startRecording(context: Context) {
         mediaRecorder = MediaRecorder().apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP)
             setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB)
+
+            // Generar la ruta del archivo para esta grabación
+            audioFilePath = generateAudioFilePath(context)
             setOutputFile(audioFilePath)
+
             try {
                 prepare()
                 start()
@@ -265,7 +273,8 @@ fun NotaScreen(
         }
     }
 
-    fun stopRecording() {
+    // Función para detener la grabación y agregar el nuevo audio a la lista
+    fun stopRecording(context: Context, audioFilesState: MutableList<String>) {
         mediaRecorder?.apply {
             try {
                 stop()
@@ -273,6 +282,11 @@ fun NotaScreen(
                 release()
                 isRecording = false
                 Toast.makeText(context, "Grabación finalizada", Toast.LENGTH_SHORT).show()
+
+                // Agregar la ruta del archivo de audio a la lista de audios
+                if (audioFilePath != null) {
+                    audioFilesState.add(audioFilePath!!)
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -280,14 +294,17 @@ fun NotaScreen(
         mediaRecorder = null
     }
 
-    // Funciones de reproducción
-    fun startPlaying() {
+    // Funciones de reproducción (se actualizan para permitir múltiples audios)
+    fun startPlaying(context: Context, audioPath: String) {
         mediaPlayer = MediaPlayer().apply {
             try {
-                setDataSource(audioFilePath)
+                setDataSource(audioPath)
                 prepare()
                 start()
                 isPlaying = true
+                setOnCompletionListener {
+                    isPlaying = false
+                }
             } catch (e: IOException) {
                 e.printStackTrace()
                 Toast.makeText(context, "Error al reproducir el audio", Toast.LENGTH_SHORT).show()
@@ -314,7 +331,7 @@ fun NotaScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = { navController.popBackStack() }) {
+            IconButton(onClick = { /* Acción para regresar */ }) {
                 Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Regresar")
             }
 
@@ -338,36 +355,40 @@ fun NotaScreen(
             }
 
             // Botón de guardar
-            if (!isReadOnly) {
-                IconButton(onClick = {
-                    if (noteTitle.isNotEmpty() && noteContent.isNotEmpty()) {
-                        if (noteId != null && noteId != 0) {
-                            viewModel.update(
-                                Note(
-                                    id = noteId,
-                                    title = noteTitle,
-                                    content = noteContent,
-                                    mediaUris = mediaUris // Guardar la lista de URIs
-                                )
+            IconButton(onClick = {
+                if (noteTitle.isNotEmpty() && noteContent.isNotEmpty()) {
+                    // Combina mediaUris y audioFilesState evitando duplicados
+                    val combinedMediaUris = (mediaUris + audioFilesState).distinct()
+
+                    if (noteId != null && noteId != 0) {
+                        // Actualizar nota existente
+                        viewModel.update(
+                            Note(
+                                id = noteId,
+                                title = noteTitle,
+                                content = noteContent,
+                                mediaUris = combinedMediaUris // Guarda solo URIs únicas
                             )
-                            Toast.makeText(context, "Nota actualizada", Toast.LENGTH_SHORT).show()
-                        } else {
-                            viewModel.insert(
-                                Note(
-                                    title = noteTitle,
-                                    content = noteContent,
-                                    mediaUris = mediaUris // Guardar la lista de URIs
-                                )
-                            )
-                            Toast.makeText(context, "Nota guardada", Toast.LENGTH_SHORT).show()
-                        }
-                        navController.popBackStack()
+                        )
+                        Toast.makeText(context, "Nota actualizada", Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(context, "Por favor completa todos los campos", Toast.LENGTH_SHORT).show()
+                        // Insertar nueva nota
+                        viewModel.insert(
+                            Note(
+                                title = noteTitle,
+                                content = noteContent,
+                                mediaUris = combinedMediaUris // Guarda solo URIs únicas
+                            )
+                        )
+                        Toast.makeText(context, "Nota guardada", Toast.LENGTH_SHORT).show()
                     }
-                }) {
-                    Icon(imageVector = Icons.Default.Save, contentDescription = "Guardar")
+
+                    navController.popBackStack()
+                } else {
+                    Toast.makeText(context, "Por favor completa todos los campos", Toast.LENGTH_SHORT).show()
                 }
+            }) {
+                Icon(imageVector = Icons.Default.Save, contentDescription = "Guardar")
             }
         }
 
@@ -392,6 +413,75 @@ fun NotaScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        //Mostrar los audios grabados
+        LaunchedEffect(mediaUris) {
+            if (!mediaUris.isNullOrEmpty()) {
+                // Filtrar solo archivos con extensiones .mp3 o .3gp y eliminar duplicados
+                val filteredAudioUris = mediaUris
+                    .filter { it.endsWith(".mp3", ignoreCase = true) || it.endsWith(".3gp", ignoreCase = true) } // .mp3 y .3gp
+                    .distinct() // Asegurarse de que no haya duplicados
+
+                audioFilesState.clear() // Limpiar el estado antes de agregar nuevos valores
+                audioFilesState.addAll(filteredAudioUris)
+            } else {
+                // Limpiar si no hay mediaUris
+                audioFilesState.clear()
+            }
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(audioFilesState) { audioPath ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                ) {
+                    // Mostrar el nombre del archivo de audio (sin la ruta completa)
+                    Text(
+                        text = "Audio: ${audioPath.substringAfterLast('/')}",
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    // Botón para reproducir el audio
+                    // Crear un estado para manejar la reproducción del audio
+                    var isAudioPlaying by remember { mutableStateOf(false) }
+
+                    IconButton(
+                        onClick = {
+                            if (isAudioPlaying) {
+                                // Si está reproduciendo, pausamos el audio
+                                stopPlaying()  // Detenemos la reproducción
+                            } else {
+                                // Si está pausado, reproducimos el audio
+                                startPlaying(context, audioPath)  // Iniciamos la reproducción
+                            }
+                            isAudioPlaying = !isAudioPlaying  // Cambiar el estado de reproducción
+                        },
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isAudioPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isAudioPlaying) "Pausar Audio" else "Reproducir Audio"
+                        )
+                    }
+
+                    // Icono para eliminar el audio
+                    IconButton(
+                        onClick = {
+                            Log.d("AudioFiles", "Eliminando audio: $audioPath")
+                            audioFilesState.remove(audioPath) // Eliminar de la lista
+                        }
+                    ) {
+                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Eliminar Audio")
+                    }
+                }
+            }
+        }
+
         // Mostrar las imágenes o videos seleccionados
         // Función auxiliar para determinar si la URI es un video
         fun isVideo(uri: String): Boolean {
@@ -408,8 +498,14 @@ fun NotaScreen(
         // Inicializamos mediaUrisState con mediaUris solo si no está vacía
         LaunchedEffect(mediaUris) {
             if (!mediaUris.isNullOrEmpty()) {
+                val uniqueMediaUris = mediaUris.distinct() // Asegúrate de eliminar duplicados
+                if (mediaUrisState != uniqueMediaUris) { // Compara los contenidos de las listas
+                    mediaUrisState.clear() // Limpiar el estado actual
+                    mediaUrisState.addAll(uniqueMediaUris) // Agregar URIs únicas
+                }
+            } else {
+                // Si mediaUris está vacío o es nulo, limpia el estado
                 mediaUrisState.clear()
-                mediaUrisState.addAll(mediaUris)
             }
         }
 
@@ -418,6 +514,12 @@ fun NotaScreen(
         ) {
             items(mediaUrisState) { mediaUri ->
                 Log.d("MediaUris", "Procesando mediaUri: $mediaUri")
+
+                // Omitir archivos de audio
+                if (mediaUri.endsWith(".3gp", ignoreCase = true) || mediaUri.endsWith(".mp3", ignoreCase = true)) {
+                    Log.d("MediaUris", "Archivo de audio detectado, no se mostrará: $mediaUri")
+                    return@items // Salir de la iteración para este elemento
+                }
 
                 if (isVideo(mediaUri)) {
                     Log.d("MediaUris", "El archivo es un video: $mediaUri")
@@ -433,7 +535,6 @@ fun NotaScreen(
                             AndroidView(
                                 factory = { context ->
                                     VideoView(context).apply {
-                                        // Asegúrate de que la URI sea válida antes de cargarla
                                         try {
                                             Log.d("MediaUris", "Intentando cargar video desde URI: $mediaUri")
                                             setVideoURI(Uri.parse(mediaUri))
@@ -476,14 +577,18 @@ fun NotaScreen(
                                 }
                             )
 
-                            Button(
+                            //Boton para reproducir el video
+                            IconButton(
                                 onClick = {
                                     isPlaying = !isPlaying
                                     Log.d("MediaUris", if (isPlaying) "Reproduciendo video: $mediaUri" else "Pausando video: $mediaUri")
                                 },
                                 modifier = Modifier.padding(top = 8.dp)
                             ) {
-                                Text(if (isPlaying) "Pausar" else "Reproducir")
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = if (isPlaying) "Pausar Video" else "Reproducir Video"
+                                )
                             }
                         }
 
@@ -497,6 +602,7 @@ fun NotaScreen(
                             Icon(imageVector = Icons.Default.Delete, contentDescription = "Eliminar Video")
                         }
                     }
+
                 } else {
                     Log.d("MediaUris", "El archivo es una imagen: $mediaUri")
 
@@ -528,7 +634,8 @@ fun NotaScreen(
                 }
             }
 
-            // Espaciador para separar elementos
+
+        // Espaciador para separar elementos
             item {
                 Spacer(modifier = Modifier.height(16.dp))
             }
@@ -582,11 +689,9 @@ fun NotaScreen(
                         IconButton(
                             onClick = {
                                 if (isRecording) {
-                                    Log.d("Botones", "Clic en botón para detener grabación")
-                                    stopRecording()
+                                    stopRecording(context, audioFilesState)
                                 } else {
-                                    Log.d("Botones", "Clic en botón para iniciar grabación")
-                                    startRecording()
+                                    startRecording(context)
                                 }
                             },
                             modifier = Modifier
@@ -598,34 +703,12 @@ fun NotaScreen(
                                 Icon(imageVector = Icons.Default.Mic, contentDescription = "Grabar Audio")
                             }
                         }
-
-                        // Botón de reproducción de audio
-                        val playButtonColor by animateColorAsState(
-                            targetValue = if (isPlaying) Color.Green else Color(0xFFFFF59D)
-                        )
-
-                        IconButton(
-                            onClick = {
-                                if (isPlaying) {
-                                    Log.d("Botones", "Clic en botón para detener reproducción de audio")
-                                    stopPlaying()
-                                } else {
-                                    Log.d("Botones", "Clic en botón para iniciar reproducción de audio")
-                                    startPlaying()
-                                }
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(8.dp),
-                            colors = IconButtonDefaults.iconButtonColors(containerColor = playButtonColor)
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Reproducir Audio")
-                            }
-                        }
                     }
                 }
             }
         }
     }
 }
+
+
+
