@@ -88,6 +88,8 @@ fun TasksScreen(
     // Estado para saber si estamos grabando
     var isRecording by remember { mutableStateOf(false) }
 
+    var userSelectedRepeatCount by remember { mutableStateOf(1) }
+
     // Estado para saber si estamos reproduciendo
     var isPlaying by remember { mutableStateOf(false) }
 
@@ -417,6 +419,16 @@ fun TasksScreen(
                             }
                         }
                     )
+
+                    Text(text = "Repetir notificación:")
+                    Slider(
+                        value = userSelectedRepeatCount.toFloat(),
+                        onValueChange = { userSelectedRepeatCount = it.toInt() },
+                        valueRange = 1f..10f,
+                        steps = 9
+                    )
+                    Text(text = "Cantidad: $userSelectedRepeatCount veces")
+
                 }
             }
 
@@ -447,7 +459,8 @@ fun TasksScreen(
 
                     // Programar la notificación si está habilitada
                     if (isNotificationEnabled) {
-                        scheduleNotification(context, taskTitle, taskDate, taskTime)
+                        val repeatCount = userSelectedRepeatCount
+                        scheduleNotification(context, taskTitle, taskDate, taskTime, repeatCount)
                     }
 
                     // Navegar hacia atrás después de guardar
@@ -655,8 +668,13 @@ fun showTimePicker(context: Context, onTimeSelected: (String) -> Unit) {
 
 
 // Función para programar la notificación
-fun scheduleNotification(context: Context, taskTitle: String, taskDate: String, taskTime: String) {
-    // Verificar si se tiene el permiso para programar alarmas exactas
+fun scheduleNotification(
+    context: Context,
+    taskTitle: String,
+    taskDate: String,
+    taskTime: String,
+    repeatCount: Int // Número de veces que se repite la notificación
+) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         if (!context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()) {
             val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
@@ -669,7 +687,7 @@ fun scheduleNotification(context: Context, taskTitle: String, taskDate: String, 
     val dateParts = taskDate.split("/")
     val timeParts = taskTime.split(":")
 
-    // Establecer la fecha y hora de la notificación
+    // Configurar la fecha y hora inicial
     calendar.set(Calendar.DAY_OF_MONTH, dateParts[0].toInt())
     calendar.set(Calendar.MONTH, dateParts[1].toInt() - 1)
     calendar.set(Calendar.YEAR, dateParts[2].toInt())
@@ -677,29 +695,34 @@ fun scheduleNotification(context: Context, taskTitle: String, taskDate: String, 
     calendar.set(Calendar.MINUTE, timeParts[1].toInt())
     calendar.set(Calendar.SECOND, 0)
 
-    // Verificar que la fecha y hora no sean en el pasado
     if (calendar.timeInMillis < System.currentTimeMillis()) {
         Toast.makeText(context, "La hora seleccionada ya pasó", Toast.LENGTH_SHORT).show()
         return
     }
 
-    // Crear el Intent para disparar la notificación
-    val intent = Intent(context, NotificationReceiver::class.java).apply {
-        putExtra("taskTitle", taskTitle)
-    }
-
-    // Crear un PendingIntent para que se ejecute cuando el AlarmManager dispare la notificación
-    val pendingIntent = PendingIntent.getBroadcast(
-        context,
-        0,
-        intent,
-        PendingIntent.FLAG_IMMUTABLE
-    )
-
-    // Obtener una instancia de AlarmManager
     val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-    // Programar la notificación para que se dispare a la hora seleccionada
-    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, calendar.timeInMillis, pendingIntent)
+    for (i in 0 until repeatCount) {
+        val intent = Intent(context, NotificationReceiver::class.java).apply {
+            putExtra("taskTitle", taskTitle)
+            putExtra("repeatIndex", i + 1)
+            putExtra("totalRepeats", repeatCount)
+        }
 
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            i, // Usamos `i` para diferenciar cada notificación
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        // Programar la notificación
+        alarmManager.setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            calendar.timeInMillis + i * 5 * 60 * 1000, // Incrementar 5 minutos por iteración
+            pendingIntent
+        )
+    }
+
+    Toast.makeText(context, "Notificaciones programadas", Toast.LENGTH_SHORT).show()
 }
